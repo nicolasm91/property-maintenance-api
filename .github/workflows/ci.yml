@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  unit-tests:
-    name: Unit tests
+  checks:
+    name: Lint, test and build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,4 +34,12 @@ jobs:
       # postinstall runs `prisma generate`, which needs no database.
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm test
+      # Also enforces the hexagonal layer boundaries (see .oxlintrc.json).
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
