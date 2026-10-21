@@ -1,8 +1,7 @@
 import { Administration } from '../entities/administration.entity.js';
 
-// Contract that services depend on, never a concrete database. It is an
-// abstract class (not an interface) so Nest can use it as the injection
-// token; the implementation is bound in AdministrationsModule.
+// Abstract class instead of an interface: interfaces don't exist at runtime,
+// so Nest couldn't use one as the injection token.
 export abstract class AdministrationsRepository {
   abstract create(data: { name: string }): Promise<Administration>;
   abstract findById(id: string): Promise<Administration | null>;

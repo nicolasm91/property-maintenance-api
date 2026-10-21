@@ -8,7 +8,6 @@ import { PrismaAdministrationsRepository } from './repositories/prisma/prisma-ad
   controllers: [AdministrationsController],
   providers: [
     AdministrationsService,
-    // To change the database, bind another implementation here.
     {
       provide: AdministrationsRepository,
       useClass: PrismaAdministrationsRepository,

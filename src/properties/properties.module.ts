@@ -10,7 +10,6 @@ import { PrismaPropertiesRepository } from './repositories/prisma/prisma-propert
   controllers: [PropertiesController],
   providers: [
     PropertiesService,
-    // To change the database, bind another implementation here.
     { provide: PropertiesRepository, useClass: PrismaPropertiesRepository },
   ],
 })

@@ -40,7 +40,6 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     address,
     administrationId,
   }: CreatePropertyData) {
-    // Property and first assignment are written in a single statement.
     const row = await this.prisma.property.create({
       data: {
         propertyType,
@@ -94,8 +93,8 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
       ]);
       return toProperty(row);
     } catch (error) {
-      // A concurrent change already opened an assignment for this property
-      // (partial unique index "administration_assignments_one_open_per_property").
+      // A concurrent change already opened an assignment for this property and
+      // the partial unique index on open assignments rejected ours.
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'

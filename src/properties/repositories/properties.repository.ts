@@ -11,24 +11,17 @@ export interface CreatePropertyData {
   administrationId: string | null;
 }
 
-// Contract that services depend on, never a concrete database. It is an
-// abstract class (not an interface) so Nest can use it as the injection
-// token; the implementation is bound in PropertiesModule.
+// Abstract class instead of an interface: interfaces don't exist at runtime,
+// so Nest couldn't use one as the injection token.
 export abstract class PropertiesRepository {
-  /** Creates the property and, if it has an administration, its first assignment, atomically. */
   abstract create(data: CreatePropertyData): Promise<Property>;
   abstract findById(id: string): Promise<Property | null>;
   abstract findAll(filter: { administrationId?: string }): Promise<Property[]>;
-  /**
-   * Atomically closes the current assignment, opens a new one and updates the
-   * property's current administration. Throws ConflictException if another
-   * change on the same property happened concurrently.
-   */
+  // Must be atomic. Throws ConflictException on a concurrent change.
   abstract changeAdministration(
     propertyId: string,
     administrationId: string,
   ): Promise<Property>;
-  /** Newest first. */
   abstract findAdministrationHistory(
     propertyId: string,
   ): Promise<AdministrationAssignment[]>;
