@@ -12,7 +12,7 @@ This document collects the system's design decisions. Each section will be compl
 
 ### 1.1 Purpose
 
-A platform that connects **property administrations** (consorcio administrators) and **individual property owners/tenants** with **tradespeople** and **contractor companies** who perform building repairs and maintenance, such as masons, electricians, plumbers, and similar trades.
+A platform that connects **property administrations** (firms that manage condominium associations) and **individual property owners/tenants** with **tradespeople** and **contractor companies** who perform building repairs and maintenance, such as masons, electricians, plumbers, and similar trades.
 
 ### 1.2 Scope
 
@@ -24,15 +24,15 @@ A platform that connects **property administrations** (consorcio administrators)
 
 | Term                    | Definition                                                                                                                  |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Consorcio               | A condominium / homeowners' association that jointly owns and maintains the common areas of a building.                    |
-| Property administration | The organization that administers one or more consorcios (Spanish: _administración de consorcios_). It is a **client**, not a Company. |
+| Condominium association | The owners of the units of a building, organized to jointly maintain its common areas. Managed by a property administration. |
+| Property administration | The organization that manages one or more condominium associations. It is a **client**, not a Company. |
 | Company                 | A company that groups one or more contractors. A Company is **not** a property administration.                             |
 | Contractor              | A user who belongs to a Company, receives tasks, and has tradesmen at their service.                                        |
 | Tradesman               | A professional who performs repair work in a given trade. Works independently or at the service of a contractor.                                   |
 | Property manager        | A user who belongs to a property administration, either as `admin` or as `member`. _Placeholder name._                     |
 | Direct client           | A private individual who lives in a private home and uses the app to request repairs for it. Does not belong to any property administration.      |
 | Trade                   | The specialty a tradesman offers (electrician, handyman, plumber, etc.).                                                    |
-| Property                | A house or building where repairs take place. A building knows which property administration (consorcio administration) it is assigned to.                                                                               |
+| Property                | A house or building where repairs take place. A building knows which property administration it is assigned to.                                                                               |
 | Unit                    | A functional unit (apartment, office, etc.) inside a property.                                                              |
 | Task                    | A repair or maintenance job created by a property manager or a direct client, and assigned to a contractor or directly to a tradesman.                                    |
 
@@ -149,7 +149,22 @@ Business rules:
 
 ### 4.2 Architectural style
 
-`TBD`: modular monolith, layered, hexagonal, etc.
+**Modular monolith with hexagonal architecture (ports and adapters)** inside each module. See ADR-005.
+
+| Layer          | Contains                                                                 | May depend on                         |
+| -------------- | ------------------------------------------------------------------------ | ------------------------------------- |
+| Domain         | Entities, value objects, aggregate invariants, domain errors, repository ports. Plain TypeScript. | Other domain code only.               |
+| Application    | Use cases, read-side ports (queries), shared ports (`Clock`, `IdGenerator`). | Domain. Nest DI decorators (`@Injectable`, `@Inject`) are allowed. |
+| Infrastructure | Adapters: HTTP controllers and request DTOs, Prisma repositories and queries, in-memory repositories. | Everything.                           |
+
+Rules:
+
+- The domain does not know about Nest, Prisma, HTTP, or any database. The application layer depends on **ports**, never on adapters. Both rules are enforced by the linter (`no-restricted-imports` overrides in `.oxlintrc.json`); test files are exempt, since they compose adapters.
+- Each module binds ports to adapters in its Nest module (e.g. `{ provide: PROPERTY_REPOSITORY, useClass: PrismaPropertyRepository }`). Changing the database means writing new adapters and changing those bindings.
+- Writes go through aggregates and repositories (`findById` / `save`). Reads that need joins or listings go through query ports returning views (light CQRS), so listings don't load whole aggregates.
+- Identifiers (UUID) and timestamps are produced by the application (`IdGenerator`, `Clock`), not by the database.
+- Aggregate invariants live in the domain. A storage-level guard (e.g. a unique index) may back them up, but the adapter must translate its errors into domain errors (e.g. `ConcurrencyError`).
+- Each repository `save` persists the whole aggregate atomically. How (transaction, single document, etc.) is the adapter's concern.
 
 ### 4.3 Component diagram
 
@@ -161,9 +176,25 @@ flowchart LR
 
 ### 4.4 Module structure
 
-| Module | Responsibility | Dependencies |
-| ------ | -------------- | ------------ |
-| `TBD`  | `TBD`          | `TBD`        |
+| Module            | Responsibility                                                                 | Dependencies                     |
+| ----------------- | ------------------------------------------------------------------------------ | -------------------------------- |
+| `shared`          | Domain error base classes, `Clock` and `IdGenerator` ports and adapters, HTTP error mapping, validation, Prisma client. | None                             |
+| `administrations` | `Administration` aggregate.                                                     | `shared`                         |
+| `properties`      | `Property` aggregate and its administration assignment history.               | `shared`, `administrations` (repository port) |
+| `health`          | `GET /health`.                                                                 | `shared` (Prisma)                |
+
+Layout of a module:
+
+```
+src/<module>/
+  domain/            entities, value objects, errors, repository ports
+  application/       use cases
+    ports/           read-side ports (queries)
+  infrastructure/
+    http/            controllers, request DTOs, response mappers
+    persistence/     Prisma and in-memory adapters
+  <module>.module.ts binds ports to adapters
+```
 
 ---
 
@@ -179,7 +210,7 @@ flowchart LR
 | PropertyManager        | User profile for a member of a property administration (`admin` or `member`). _Placeholder name._ |
 | DirectClient           | User profile for a private individual tied to their own home.       |
 | Company                | Company that groups contractors.                                    |
-| PropertyAdministration | Organization (client) that administers consorcios.                  |
+| PropertyAdministration | Organization (client) that manages condominium associations.                  |
 | Property               | A house or building.                                                |
 | AdministrationAssignment | Historical record of which administration a building had, and when. |
 | Unit                   | A functional unit inside a property.                                |
@@ -190,7 +221,7 @@ flowchart LR
 
 | Field        | Type   | Notes                                                                    |
 | ------------ | ------ | ------------------------------------------------------------------------ |
-| `uuid`       | UUID   | Primary key.                                                             |
+| `id`         | UUID   | Primary key.                                                             |
 | `name`       | string |                                                                          |
 | `middleName` | string | Optional.                                                                |
 | `lastName`   | string |                                                                          |
@@ -216,14 +247,14 @@ Enum: `electrician`, `handyman`, `plumber`, … (list to be extended).
 
 | Field         | Type | Notes        |
 | ------------- | ---- | ------------ |
-| `uuid`        | UUID | Primary key. |
+| `id`          | UUID | Primary key. |
 | Payment data  | TBD  | To be defined. |
 
 #### PropertyAdministration
 
 | Field         | Type   | Notes          |
 | ------------- | ------ | -------------- |
-| `uuid`        | UUID   | Primary key.   |
+| `id`          | UUID   | Primary key.   |
 | `name`        | string |                |
 | Payment data  | TBD    | To be defined. |
 
@@ -231,7 +262,7 @@ Enum: `electrician`, `handyman`, `plumber`, … (list to be extended).
 
 | Field          | Type   | Notes                                              |
 | -------------- | ------ | -------------------------------------------------- |
-| `uuid`         | UUID   | Primary key.                                       |
+| `id`           | UUID   | Primary key.                                       |
 | `propertyType` | enum   | `house` \| `building`.                             |
 | `address`      | object | See below.                                         |
 | `administrationId` | UUID | FK → PropertyAdministration **currently** assigned to the building. Empty for direct clients' homes. Past assignments live in [AdministrationAssignment](#administrationassignment). |
@@ -244,7 +275,7 @@ Enum: `electrician`, `handyman`, `plumber`, … (list to be extended).
 | `street`       | string |                                            |
 | `number`       | string |                                            |
 | `postalCode`   | string |                                            |
-| `intersection` | string | Nearest cross street(s) ("entre calles"). |
+| `intersection` | string | Nearest cross streets. |
 
 #### AdministrationAssignment
 
@@ -252,7 +283,7 @@ One row per period in which a building was administered by a given administratio
 
 | Field              | Type      | Notes                                                    |
 | ------------------ | --------- | -------------------------------------------------------- |
-| `uuid`             | UUID      | Primary key.                                             |
+| `id`               | UUID      | Primary key.                                             |
 | `propertyId`       | UUID      | FK → Property.                                           |
 | `administrationId` | UUID      | FK → PropertyAdministration.                             |
 | `startedAt`        | timestamp | When the administration took over the building.          |
@@ -267,7 +298,7 @@ Rules:
 
 | Field        | Type   | Notes                                           |
 | ------------ | ------ | ----------------------------------------------- |
-| `uuid`       | UUID   | Primary key.                                    |
+| `id`         | UUID   | Primary key.                                    |
 | `unitId`     | string | Human-readable identifier within the property (e.g. `4B`). |
 | `propertyId` | UUID   | FK → Property.                                  |
 | `managerId`  | UUID   | FK → User. Which kind of user is still to be defined with the product team. |
@@ -276,7 +307,7 @@ Rules:
 
 | Field         | Type      | Notes                                                  |
 | ------------- | --------- | ------------------------------------------------------ |
-| `uuid`        | UUID      | Primary key.                                           |
+| `id`          | UUID      | Primary key.                                           |
 | `title`       | string    | Short summary of the job.                              |
 | `description` | text      | Details of the problem / work to be done.              |
 | `trade`       | enum      | Trade required for the job. See [Trade](#trade).       |
@@ -326,7 +357,7 @@ Append-only history of a task. Every relevant action creates one row, in the sam
 
 | Field          | Type      | Notes                                                                                     |
 | -------------- | --------- | ----------------------------------------------------------------------------------------- |
-| `uuid`         | UUID      | Primary key.                                                                              |
+| `id`           | UUID      | Primary key.                                                                              |
 | `taskId`       | UUID      | FK → Task.                                                                                |
 | `type`         | enum      | `created` \| `assigned` \| `reassigned` \| `rejected` \| `rescheduled` \| `completed` \| `cancelled`. `rescheduled` will be used once rescheduling exists. |
 | `actorId`      | UUID      | FK → User who performed the action.                                                       |
@@ -408,7 +439,7 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 
 ### 6.1 Conventions
 
-- **Style:** `TBD` (REST / GraphQL)
+- **Style:** REST
 - **Versioning:** `TBD`
 - **Format:** JSON
 - **Resource naming:** `TBD`
@@ -419,13 +450,36 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 
 ### 6.2 Endpoints
 
-| Method | Path  | Description | Required role |
-| ------ | ----- | ----------- | ------------- |
-| `TBD`  | `TBD` | `TBD`       | `TBD`         |
+Authentication is not implemented yet, so no endpoint enforces its required role for now.
+
+| Method | Path                                    | Description                                                                  | Required role  |
+| ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
+| GET    | `/health`                               | API and database health.                                                     | None           |
+| POST   | `/administrations`                      | Create a property administration.                                            | Platform owner |
+| GET    | `/administrations`                      | List administrations.                                                        | `TBD`          |
+| GET    | `/administrations/:id`                  | Get an administration.                                                       | `TBD`          |
+| GET    | `/administrations/:id/properties`       | Buildings currently assigned to the administration.                          | `TBD`          |
+| POST   | `/properties`                           | Create a property, optionally assigned to an administration.                 | `TBD`          |
+| GET    | `/properties`                           | List properties.                                                             | `TBD`          |
+| GET    | `/properties/:id`                       | Get a property with its current administration.                              | `TBD`          |
+| PUT    | `/properties/:id/administration`        | Change the property's administration (closes the current assignment, opens a new one). | Deferred (see [Open questions](#12-open-questions)) |
+| GET    | `/properties/:id/administration-history`| Administration assignment history, newest first.                             | `TBD`          |
 
 ### 6.3 Error format
 
-`TBD`: standard error response structure and error code catalog.
+Domain errors are mapped to HTTP by a global filter (`DomainErrorFilter`):
+
+```json
+{ "statusCode": 409, "error": "PropertyAlreadyAssignedError", "message": "Property … is already assigned to administration …" }
+```
+
+| Domain error category      | HTTP status | Examples                                                     |
+| -------------------------- | ----------- | ------------------------------------------------------------ |
+| `NotFoundError`            | 404         | `PropertyNotFoundError`, `AdministrationNotFoundError`        |
+| `ConflictError`            | 409         | `PropertyAlreadyAssignedError`, `ConcurrencyError` (retryable) |
+| `InvariantViolationError`  | 422         | Blank administration name, blank address field               |
+
+Malformed requests (wrong types, unknown fields, invalid UUIDs) are rejected with `400` by the validation pipe before reaching the application.
 
 ---
 
@@ -486,6 +540,9 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 | ------- | ----- | -------- | ------ |
 | ADR-001 | 2026-10-21 | Use PostgreSQL hosted on Supabase (free tier) as the database. Supabase is used **only** as a database: no Supabase Auth, no Data API, no Supabase CLI migrations. | Accepted |
 | ADR-002 | 2026-10-21 | Use Prisma 7 as ORM, with the `pg` driver adapter. The schema and migrations live in `prisma/` and are owned by Prisma Migrate. | Accepted |
+| ADR-003 | 2026-10-21 | Naming: `camelCase` in code and API, `snake_case` in the database (tables and columns, via Prisma `@map`). Primary keys are named `id` (UUID). | Accepted |
+| ADR-004 | 2026-10-21 | Invariants Prisma cannot express are enforced in hand-written migration SQL. First case: a partial unique index guaranteeing at most one open `AdministrationAssignment` per property. | Accepted |
+| ADR-005 | 2026-10-21 | Hexagonal architecture (ports and adapters) in every module, enforced by lint rules. Goal: no coupling to a specific database vendor; persistence is replaceable by writing new adapters. Supersedes the "IDs generated by the database" part of ADR-003: IDs are now generated by the application. | Accepted |
 
 ---
 
@@ -499,7 +556,6 @@ Domain model:
 - [ ] Can a home be shared by more than one direct client in the future? (Currently 1:1.)
 - [ ] Is `Unit.managerId` a property manager, a direct client, or a unit owner/tenant? _To be defined with the product team._
 - [ ] Payment data for `Company` and `PropertyAdministration`.
-- [ ] Field naming convention for persistence and API (`camelCase` vs `snake_case`). This document uses `camelCase`.
 
 Deferred (not part of the current business-focused design phase):
 
