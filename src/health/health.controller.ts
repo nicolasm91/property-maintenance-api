@@ -6,7 +6,7 @@ export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  async check() {
+  async check(): Promise<{ status: string; database: string }> {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
     } catch {

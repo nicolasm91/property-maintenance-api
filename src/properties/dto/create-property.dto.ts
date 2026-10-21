@@ -1,19 +1,8 @@
 import { Transform, Type } from 'class-transformer';
-import {
-  IsIn,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  ValidateNested,
-} from 'class-validator';
-import {
-  PROPERTY_TYPES,
-  type PropertyType,
-} from '../entities/property.entity.js';
+import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { PROPERTY_TYPES, type PropertyType } from '../entities/property.entity.js';
 
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
 export class AddressDto {
   @Transform(trim)

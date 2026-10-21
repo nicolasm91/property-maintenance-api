@@ -8,9 +8,6 @@ import { PrismaPropertiesRepository } from './repositories/prisma/prisma-propert
 @Module({
   imports: [AdministrationsModule],
   controllers: [PropertiesController],
-  providers: [
-    PropertiesService,
-    { provide: PropertiesRepository, useClass: PrismaPropertiesRepository },
-  ],
+  providers: [PropertiesService, { provide: PropertiesRepository, useClass: PrismaPropertiesRepository }],
 })
 export class PropertiesModule {}

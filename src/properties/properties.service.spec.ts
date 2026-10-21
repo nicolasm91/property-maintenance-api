@@ -66,9 +66,7 @@ describe('PropertiesService', () => {
       await service.create({ propertyType: 'house', address });
 
       expect(administrationsService.findOne).not.toHaveBeenCalled();
-      expect(repository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ administrationId: null }),
-      );
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ administrationId: null }));
     });
 
     it('fails when the administration does not exist', async () => {
@@ -98,27 +96,27 @@ describe('PropertiesService', () => {
     it('throws 409 when the property already has that administration', async () => {
       repository.findById.mockResolvedValue(property);
 
-      await expect(
-        service.changeAdministration('p1', { administrationId: 'a1' }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.changeAdministration('p1', { administrationId: 'a1' })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
       expect(repository.changeAdministration).not.toHaveBeenCalled();
     });
 
     it('throws 404 when the property does not exist', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(
-        service.changeAdministration('missing', { administrationId: 'a2' }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.changeAdministration('missing', { administrationId: 'a2' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('fails when the new administration does not exist', async () => {
       repository.findById.mockResolvedValue(property);
       administrationsService.findOne.mockRejectedValue(new NotFoundException());
 
-      await expect(
-        service.changeAdministration('p1', { administrationId: 'missing' }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.changeAdministration('p1', { administrationId: 'missing' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
       expect(repository.changeAdministration).not.toHaveBeenCalled();
     });
   });
@@ -127,9 +125,7 @@ describe('PropertiesService', () => {
     it('throws 404 when the property does not exist', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(
-        service.findAdministrationHistory('missing'),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findAdministrationHistory('missing')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });
