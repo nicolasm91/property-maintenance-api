@@ -141,8 +141,8 @@ Business rules:
 | Package manager | pnpm                          | Defined |
 | Testing         | Vitest + Supertest            | Defined |
 | Lint / Format   | oxlint + Prettier             | Defined |
-| Database        | `TBD`                         | Pending |
-| ORM / Data access | `TBD`                       | Pending |
+| Database        | PostgreSQL (Supabase, used only as a database) | Defined |
+| ORM / Data access | Prisma 7 (`@prisma/adapter-pg`) | Defined |
 | Authentication  | `TBD`                         | Pending |
 | Cache / Queues  | `TBD`                         | Pending |
 | File storage    | `TBD` (files, photos, etc.)   | Pending |
@@ -467,7 +467,7 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 - **Logging:** `TBD`
 - **Metrics:** `TBD`
 - **Tracing:** `TBD`
-- **Health checks:** `TBD`
+- **Health checks:** `GET /health` runs `SELECT 1` against the database. Returns `200 {"status":"ok","database":"up"}`, or `503` if the database is unreachable.
 
 ---
 
@@ -484,7 +484,8 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 
 | ID      | Date  | Decision | Status |
 | ------- | ----- | -------- | ------ |
-| ADR-001 | `TBD` | `TBD`    | `TBD`  |
+| ADR-001 | 2026-10-21 | Use PostgreSQL hosted on Supabase (free tier) as the database. Supabase is used **only** as a database: no Supabase Auth, no Data API, no Supabase CLI migrations. | Accepted |
+| ADR-002 | 2026-10-21 | Use Prisma 7 as ORM, with the `pg` driver adapter. The schema and migrations live in `prisma/` and are owned by Prisma Migrate. | Accepted |
 
 ---
 

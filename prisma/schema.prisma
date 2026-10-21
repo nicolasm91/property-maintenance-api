@@ -1,0 +1,11 @@
+// Prisma schema. Docs: https://pris.ly/d/prisma-schema
+// Domain models are defined in docs/system-design.md (section 5).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
