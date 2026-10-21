@@ -140,7 +140,7 @@ Business rules:
 | Framework       | NestJS 12 (Express)           | Defined |
 | Package manager | pnpm                          | Defined |
 | Testing         | Vitest + Supertest            | Defined |
-| Lint / Format   | oxlint + Prettier             | Defined |
+| Lint / Format   | oxlint + oxfmt                | Defined |
 | Database        | PostgreSQL (Supabase, used only as a database) | Defined |
 | ORM / Data access | Prisma 7 (`@prisma/adapter-pg`) | Defined |
 | Authentication  | `TBD`                         | Pending |
