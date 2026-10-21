@@ -1,6 +1,6 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '../shared/infrastructure/persistence/prisma/prisma.service.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { HealthController } from './health.controller.js';
 
 describe('HealthController', () => {

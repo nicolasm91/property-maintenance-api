@@ -6,7 +6,6 @@ on:
   push:
     branches: [main]
 
-# Cancel superseded runs of the same PR or branch.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -31,10 +30,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # postinstall runs `prisma generate`, which needs no database.
       - run: pnpm install --frozen-lockfile
 
-      # Also enforces the hexagonal layer boundaries (see .oxlintrc.json).
       - name: Lint
         run: pnpm lint
 

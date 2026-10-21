@@ -1,23 +1,18 @@
 import { Module } from '@nestjs/common';
-import { CreateAdministrationUseCase } from './application/create-administration.use-case.js';
-import { GetAdministrationUseCase } from './application/get-administration.use-case.js';
-import { ListAdministrationsUseCase } from './application/list-administrations.use-case.js';
-import { ADMINISTRATION_REPOSITORY } from './domain/administration.repository.js';
-import { AdministrationsController } from './infrastructure/http/administrations.controller.js';
-import { PrismaAdministrationRepository } from './infrastructure/persistence/prisma-administration.repository.js';
+import { AdministrationsController } from './administrations.controller.js';
+import { AdministrationsService } from './administrations.service.js';
+import { AdministrationsRepository } from './repositories/administrations.repository.js';
+import { PrismaAdministrationsRepository } from './repositories/prisma/prisma-administrations.repository.js';
 
 @Module({
   controllers: [AdministrationsController],
   providers: [
-    // Swapping the database means binding another adapter here.
+    AdministrationsService,
     {
-      provide: ADMINISTRATION_REPOSITORY,
-      useClass: PrismaAdministrationRepository,
+      provide: AdministrationsRepository,
+      useClass: PrismaAdministrationsRepository,
     },
-    CreateAdministrationUseCase,
-    GetAdministrationUseCase,
-    ListAdministrationsUseCase,
   ],
-  exports: [ADMINISTRATION_REPOSITORY],
+  exports: [AdministrationsService],
 })
 export class AdministrationsModule {}

@@ -1,10 +1,6 @@
-// Prisma schema. Docs: https://pris.ly/d/prisma-schema
-// Domain models are defined in docs/system-design.md (section 5).
-// Naming: camelCase in code, snake_case in the database (@map / @@map).
-
 generator client {
   provider = "prisma-client"
-  output   = "../src/shared/infrastructure/persistence/prisma/generated"
+  output   = "../src/prisma/generated"
 }
 
 datasource db {
@@ -37,7 +33,7 @@ model Property {
   addressNumber       String       @map("address_number")
   addressPostalCode   String       @map("address_postal_code")
   addressIntersection String       @map("address_intersection")
-  // Current administration. Past ones live in AdministrationAssignment.
+  // Denormalized copy of the open assignment, for cheap reads.
   administrationId    String?      @map("administration_id") @db.Uuid
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz
@@ -49,9 +45,8 @@ model Property {
   @@map("properties")
 }
 
-// A building has at most one assignment with endedAt = null. Enforced by the
-// partial unique index "administration_assignments_one_open_per_property",
-// created in a hand-written migration (Prisma can't express partial indexes).
+// At most one open assignment (endedAt = null) per property, enforced by a
+// partial unique index in a hand-written migration: Prisma can't express it.
 model AdministrationAssignment {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   propertyId       String    @map("property_id") @db.Uuid

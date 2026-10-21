@@ -7,30 +7,24 @@
   "env": {
     "node": true
   },
-  "ignorePatterns": [
-    "src/shared/infrastructure/persistence/prisma/generated/**"
-  ],
+  "ignorePatterns": ["src/prisma/generated/**"],
   "overrides": [
     {
-      "files": ["src/**/domain/**/*.ts"],
+      "files": [
+        "src/**/*.controller.ts",
+        "src/**/*.service.ts",
+        "src/**/dto/**",
+        "src/**/entities/**",
+        "src/**/repositories/*.ts"
+      ],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
               {
-                "group": [
-                  "@nestjs/*",
-                  "@prisma/*",
-                  "class-validator",
-                  "class-transformer",
-                  "express"
-                ],
-                "message": "Hexagonal architecture: the domain layer must not depend on frameworks or drivers."
-              },
-              {
-                "group": ["**/application/**", "**/infrastructure/**"],
-                "message": "Hexagonal architecture: the domain layer must not depend on outer layers."
+                "group": ["@prisma/*", "**/prisma/**"],
+                "message": "Only repository implementations (repositories/prisma/) may use Prisma. Depend on the repository interface instead."
               }
             ]
           }
@@ -38,32 +32,7 @@
       }
     },
     {
-      "files": ["src/**/application/**/*.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": [
-                  "@prisma/*",
-                  "class-validator",
-                  "class-transformer",
-                  "express"
-                ],
-                "message": "Hexagonal architecture: the application layer must not depend on drivers or transport."
-              },
-              {
-                "group": ["**/infrastructure/**"],
-                "message": "Hexagonal architecture: the application layer must depend on ports, not adapters."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["src/**/*.spec.ts"],
+      "files": ["src/health/**", "src/prisma/**"],
       "rules": {
         "no-restricted-imports": "off"
       }

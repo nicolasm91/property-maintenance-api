@@ -4,14 +4,12 @@ import { AdministrationsModule } from './administrations/administrations.module.
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { HealthModule } from './health/health.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 import { PropertiesModule } from './properties/properties.module.js';
-import { PrismaModule } from './shared/infrastructure/persistence/prisma/prisma.module.js';
-import { SharedModule } from './shared/infrastructure/shared.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    SharedModule,
     PrismaModule,
     HealthModule,
     AdministrationsModule,

@@ -149,22 +149,21 @@ Business rules:
 
 ### 4.2 Architectural style
 
-**Modular monolith with hexagonal architecture (ports and adapters)** inside each module. See ADR-005.
+**Modular monolith with standard NestJS layering: Controller → Service → Repository.** Repositories are contracts (abstract classes), so the database is not tied to a concrete implementation. See ADR-005.
 
-| Layer          | Contains                                                                 | May depend on                         |
-| -------------- | ------------------------------------------------------------------------ | ------------------------------------- |
-| Domain         | Entities, value objects, aggregate invariants, domain errors, repository ports. Plain TypeScript. | Other domain code only.               |
-| Application    | Use cases, read-side ports (queries), shared ports (`Clock`, `IdGenerator`). | Domain. Nest DI decorators (`@Injectable`, `@Inject`) are allowed. |
-| Infrastructure | Adapters: HTTP controllers and request DTOs, Prisma repositories and queries, in-memory repositories. | Everything.                           |
+| Layer                     | Responsibility                                                              |
+| ------------------------- | --------------------------------------------------------------------------- |
+| Controller                | HTTP: routes, request validation (DTOs), status codes.                      |
+| Service                   | Business rules. Throws Nest HTTP exceptions (`NotFoundException`, `ConflictException`). |
+| Repository (contract)     | What the service needs from storage (`create`, `findById`, …). Returns plain entity types. |
+| Repository implementation | How it is stored. Today: Prisma (`repositories/prisma/`).                  |
 
 Rules:
 
-- The domain does not know about Nest, Prisma, HTTP, or any database. The application layer depends on **ports**, never on adapters. Both rules are enforced by the linter (`no-restricted-imports` overrides in `.oxlintrc.json`); test files are exempt, since they compose adapters.
-- Each module binds ports to adapters in its Nest module (e.g. `{ provide: PROPERTY_REPOSITORY, useClass: PrismaPropertyRepository }`). Changing the database means writing new adapters and changing those bindings.
-- Writes go through aggregates and repositories (`findById` / `save`). Reads that need joins or listings go through query ports returning views (light CQRS), so listings don't load whole aggregates.
-- Identifiers (UUID) and timestamps are produced by the application (`IdGenerator`, `Clock`), not by the database.
-- Aggregate invariants live in the domain. A storage-level guard (e.g. a unique index) may back them up, but the adapter must translate its errors into domain errors (e.g. `ConcurrencyError`).
-- Each repository `save` persists the whole aggregate atomically. How (transaction, single document, etc.) is the adapter's concern.
+- Services depend on the repository **contract** (an abstract class, injected like any other dependency), never on Prisma. Only the implementations in `repositories/prisma/` know about Prisma. This is enforced by the linter (`no-restricted-imports` in `.oxlintrc.json`).
+- Each module binds the interface to its implementation in the Nest module: `{ provide: PropertiesRepository, useClass: PrismaPropertiesRepository }`. Changing the database means writing a new implementation and changing that line.
+- Operations that must be atomic (e.g. changing a building's administration) are a single repository method; the implementation guarantees atomicity (today, a Prisma transaction).
+- Services may use other modules' services (e.g. `PropertiesService` uses `AdministrationsService`).
 
 ### 4.3 Component diagram
 
@@ -176,24 +175,27 @@ flowchart LR
 
 ### 4.4 Module structure
 
-| Module            | Responsibility                                                                 | Dependencies                     |
-| ----------------- | ------------------------------------------------------------------------------ | -------------------------------- |
-| `shared`          | Domain error base classes, `Clock` and `IdGenerator` ports and adapters, HTTP error mapping, validation, Prisma client. | None                             |
-| `administrations` | `Administration` aggregate.                                                     | `shared`                         |
-| `properties`      | `Property` aggregate and its administration assignment history.               | `shared`, `administrations` (repository port) |
-| `health`          | `GET /health`.                                                                 | `shared` (Prisma)                |
+| Module            | Responsibility                                                      | Dependencies      |
+| ----------------- | ------------------------------------------------------------------- | ----------------- |
+| `prisma`          | Prisma client (`PrismaService`).                                    | None              |
+| `administrations` | Property administrations.                                           | `prisma`          |
+| `properties`      | Properties and their administration assignment history.            | `prisma`, `administrations` |
+| `health`          | `GET /health`.                                                      | `prisma`          |
 
 Layout of a module:
 
 ```
-src/<module>/
-  domain/            entities, value objects, errors, repository ports
-  application/       use cases
-    ports/           read-side ports (queries)
-  infrastructure/
-    http/            controllers, request DTOs, response mappers
-    persistence/     Prisma and in-memory adapters
-  <module>.module.ts binds ports to adapters
+src/properties/
+  dto/                              request DTOs (validation)
+  entities/                         entity types returned by the repository and the API
+  repositories/
+    properties.repository.ts        repository contract (abstract class)
+    prisma/
+      prisma-properties.repository.ts   Prisma implementation
+  properties.controller.ts
+  properties.service.ts
+  properties.service.spec.ts        unit tests (repository mocked)
+  properties.module.ts              binds the repository interface to its implementation
 ```
 
 ---
@@ -458,28 +460,25 @@ Authentication is not implemented yet, so no endpoint enforces its required role
 | POST   | `/administrations`                      | Create a property administration.                                            | Platform owner |
 | GET    | `/administrations`                      | List administrations.                                                        | `TBD`          |
 | GET    | `/administrations/:id`                  | Get an administration.                                                       | `TBD`          |
-| GET    | `/administrations/:id/properties`       | Buildings currently assigned to the administration.                          | `TBD`          |
 | POST   | `/properties`                           | Create a property, optionally assigned to an administration.                 | `TBD`          |
-| GET    | `/properties`                           | List properties.                                                             | `TBD`          |
+| GET    | `/properties?administrationId=`         | List properties. Optional filter: buildings currently assigned to an administration. | `TBD`          |
 | GET    | `/properties/:id`                       | Get a property with its current administration.                              | `TBD`          |
 | PUT    | `/properties/:id/administration`        | Change the property's administration (closes the current assignment, opens a new one). | Deferred (see [Open questions](#12-open-questions)) |
 | GET    | `/properties/:id/administration-history`| Administration assignment history, newest first.                             | `TBD`          |
 
 ### 6.3 Error format
 
-Domain errors are mapped to HTTP by a global filter (`DomainErrorFilter`):
+Standard NestJS error responses:
 
 ```json
-{ "statusCode": 409, "error": "PropertyAlreadyAssignedError", "message": "Property … is already assigned to administration …" }
+{ "statusCode": 409, "error": "Conflict", "message": "Property … is already assigned to administration …" }
 ```
 
-| Domain error category      | HTTP status | Examples                                                     |
-| -------------------------- | ----------- | ------------------------------------------------------------ |
-| `NotFoundError`            | 404         | `PropertyNotFoundError`, `AdministrationNotFoundError`        |
-| `ConflictError`            | 409         | `PropertyAlreadyAssignedError`, `ConcurrencyError` (retryable) |
-| `InvariantViolationError`  | 422         | Blank administration name, blank address field               |
-
-Malformed requests (wrong types, unknown fields, invalid UUIDs) are rejected with `400` by the validation pipe before reaching the application.
+| Status | When                                                                                         |
+| ------ | -------------------------------------------------------------------------------------------- |
+| 400    | Invalid request: wrong types, unknown fields, blank required values, invalid UUIDs.          |
+| 404    | A referenced property or administration does not exist.                                      |
+| 409    | Business conflict (e.g. assigning the administration a property already has), or a concurrent change on the same property (retryable). |
 
 ---
 
@@ -542,7 +541,7 @@ Malformed requests (wrong types, unknown fields, invalid UUIDs) are rejected wit
 | ADR-002 | 2026-10-21 | Use Prisma 7 as ORM, with the `pg` driver adapter. The schema and migrations live in `prisma/` and are owned by Prisma Migrate. | Accepted |
 | ADR-003 | 2026-10-21 | Naming: `camelCase` in code and API, `snake_case` in the database (tables and columns, via Prisma `@map`). Primary keys are named `id` (UUID). | Accepted |
 | ADR-004 | 2026-10-21 | Invariants Prisma cannot express are enforced in hand-written migration SQL. First case: a partial unique index guaranteeing at most one open `AdministrationAssignment` per property. | Accepted |
-| ADR-005 | 2026-10-21 | Hexagonal architecture (ports and adapters) in every module, enforced by lint rules. Goal: no coupling to a specific database vendor; persistence is replaceable by writing new adapters. Supersedes the "IDs generated by the database" part of ADR-003: IDs are now generated by the application. | Accepted |
+| ADR-005 | 2026-10-21 | Standard NestJS layering (Controller → Service → Repository) with repositories defined as interfaces. Only repository implementations (`repositories/prisma/`) may use Prisma, enforced by lint rules. Goal: the database is not tied to a concrete implementation. | Accepted |
 
 ---
 
