@@ -1,11 +1,68 @@
 // Prisma schema. Docs: https://pris.ly/d/prisma-schema
 // Domain models are defined in docs/system-design.md (section 5).
+// Naming: camelCase in code, snake_case in the database (@map / @@map).
 
 generator client {
   provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  output   = "../src/shared/infrastructure/persistence/prisma/generated"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum PropertyType {
+  house
+  building
+
+  @@map("property_type")
+}
+
+model PropertyAdministration {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  properties  Property[]
+  assignments AdministrationAssignment[]
+
+  @@map("property_administrations")
+}
+
+model Property {
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyType        PropertyType @map("property_type")
+  addressStreet       String       @map("address_street")
+  addressNumber       String       @map("address_number")
+  addressPostalCode   String       @map("address_postal_code")
+  addressIntersection String       @map("address_intersection")
+  // Current administration. Past ones live in AdministrationAssignment.
+  administrationId    String?      @map("administration_id") @db.Uuid
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  administration PropertyAdministration?    @relation(fields: [administrationId], references: [id])
+  assignments    AdministrationAssignment[]
+
+  @@index([administrationId])
+  @@map("properties")
+}
+
+// A building has at most one assignment with endedAt = null. Enforced by the
+// partial unique index "administration_assignments_one_open_per_property",
+// created in a hand-written migration (Prisma can't express partial indexes).
+model AdministrationAssignment {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  propertyId       String    @map("property_id") @db.Uuid
+  administrationId String    @map("administration_id") @db.Uuid
+  startedAt        DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+
+  property       Property               @relation(fields: [propertyId], references: [id])
+  administration PropertyAdministration @relation(fields: [administrationId], references: [id])
+
+  @@index([propertyId])
+  @@index([administrationId])
+  @@map("administration_assignments")
 }
