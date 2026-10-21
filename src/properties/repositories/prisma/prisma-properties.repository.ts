@@ -1,7 +1,10 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '../../../prisma/generated/client.js';
 import { PrismaService } from '../../../prisma/prisma.service.js';
-import { Property } from '../../entities/property.entity.js';
+import {
+  AdministrationAssignment,
+  Property,
+} from '../../entities/property.entity.js';
 import {
   CreatePropertyData,
   PropertiesRepository,
@@ -39,7 +42,7 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     propertyType,
     address,
     administrationId,
-  }: CreatePropertyData) {
+  }: CreatePropertyData): Promise<Property> {
     const row = await this.prisma.property.create({
       data: {
         propertyType,
@@ -57,7 +60,7 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     return toProperty(row);
   }
 
-  async findById(id: string) {
+  async findById(id: string): Promise<Property | null> {
     const row = await this.prisma.property.findUnique({
       where: { id },
       include: propertyInclude,
@@ -65,7 +68,7 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     return row ? toProperty(row) : null;
   }
 
-  async findAll(filter: { administrationId?: string }) {
+  async findAll(filter: { administrationId?: string }): Promise<Property[]> {
     const rows = await this.prisma.property.findMany({
       where: { administrationId: filter.administrationId },
       include: propertyInclude,
@@ -74,7 +77,10 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     return rows.map(toProperty);
   }
 
-  async changeAdministration(propertyId: string, administrationId: string) {
+  async changeAdministration(
+    propertyId: string,
+    administrationId: string,
+  ): Promise<Property> {
     const now = new Date();
     try {
       const [, , row] = await this.prisma.$transaction([
@@ -107,7 +113,9 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     }
   }
 
-  findAdministrationHistory(propertyId: string) {
+  findAdministrationHistory(
+    propertyId: string,
+  ): Promise<AdministrationAssignment[]> {
     return this.prisma.administrationAssignment.findMany({
       where: { propertyId },
       select: {
