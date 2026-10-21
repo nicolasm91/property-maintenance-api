@@ -1,14 +1,8 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '../../../prisma/generated/client.js';
 import { PrismaService } from '../../../prisma/prisma.service.js';
-import {
-  AdministrationAssignment,
-  Property,
-} from '../../entities/property.entity.js';
-import {
-  CreatePropertyData,
-  PropertiesRepository,
-} from '../properties.repository.js';
+import { AdministrationAssignment, Property } from '../../entities/property.entity.js';
+import { CreatePropertyData, PropertiesRepository } from '../properties.repository.js';
 
 const administrationSummary = { select: { id: true, name: true } } as const;
 
@@ -38,11 +32,7 @@ const toProperty = (row: PropertyRow): Property => ({
 export class PrismaPropertiesRepository implements PropertiesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create({
-    propertyType,
-    address,
-    administrationId,
-  }: CreatePropertyData): Promise<Property> {
+  async create({ propertyType, address, administrationId }: CreatePropertyData): Promise<Property> {
     const row = await this.prisma.property.create({
       data: {
         propertyType,
@@ -51,9 +41,7 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
         addressPostalCode: address.postalCode,
         addressIntersection: address.intersection,
         administrationId,
-        assignments: administrationId
-          ? { create: { administrationId } }
-          : undefined,
+        assignments: administrationId ? { create: { administrationId } } : undefined,
       },
       include: propertyInclude,
     });
@@ -77,10 +65,7 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     return rows.map(toProperty);
   }
 
-  async changeAdministration(
-    propertyId: string,
-    administrationId: string,
-  ): Promise<Property> {
+  async changeAdministration(propertyId: string, administrationId: string): Promise<Property> {
     const now = new Date();
     try {
       const [, , row] = await this.prisma.$transaction([
@@ -101,21 +86,14 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
     } catch (error) {
       // A concurrent change already opened an assignment for this property and
       // the partial unique index on open assignments rejected ours.
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new ConflictException(
-          `The administration of property ${propertyId} was changed concurrently, retry`,
-        );
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(`The administration of property ${propertyId} was changed concurrently, retry`);
       }
       throw error;
     }
   }
 
-  findAdministrationHistory(
-    propertyId: string,
-  ): Promise<AdministrationAssignment[]> {
+  findAdministrationHistory(propertyId: string): Promise<AdministrationAssignment[]> {
     return this.prisma.administrationAssignment.findMany({
       where: { propertyId },
       select: {

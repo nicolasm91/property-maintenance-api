@@ -1,9 +1,4 @@
-import {
-  Address,
-  AdministrationAssignment,
-  Property,
-  PropertyType,
-} from '../entities/property.entity.js';
+import { Address, AdministrationAssignment, Property, PropertyType } from '../entities/property.entity.js';
 
 export interface CreatePropertyData {
   propertyType: PropertyType;
@@ -18,11 +13,6 @@ export abstract class PropertiesRepository {
   abstract findById(id: string): Promise<Property | null>;
   abstract findAll(filter: { administrationId?: string }): Promise<Property[]>;
   // Must be atomic. Throws ConflictException on a concurrent change.
-  abstract changeAdministration(
-    propertyId: string,
-    administrationId: string,
-  ): Promise<Property>;
-  abstract findAdministrationHistory(
-    propertyId: string,
-  ): Promise<AdministrationAssignment[]>;
+  abstract changeAdministration(propertyId: string, administrationId: string): Promise<Property>;
+  abstract findAdministrationHistory(propertyId: string): Promise<AdministrationAssignment[]>;
 }

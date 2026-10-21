@@ -27,8 +27,6 @@ describe('HealthController', () => {
 
   it('throws 503 when the database is unreachable', async () => {
     prisma.$queryRaw.mockRejectedValue(new Error('connection refused'));
-    await expect(controller.check()).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    await expect(controller.check()).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });
