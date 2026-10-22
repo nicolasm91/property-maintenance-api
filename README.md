@@ -31,6 +31,20 @@
 $ pnpm install
 ```
 
+## Run with Docker
+
+Runs the API and the [web app](https://github.com/nicolasm91/property-maintenance-web) with hot reload. Expects both repos cloned side by side, and a `.env` in each (see their `.env.example`). The database is Supabase, so `DATABASE_URL` must be the Session pooler URI (IPv4).
+
+```bash
+docker compose up --build    # API on :3000, web on :5173
+```
+
+After changing dependencies, recreate the containers' `node_modules`:
+
+```bash
+docker compose up --build --renew-anon-volumes
+```
+
 ## Compile and run the project
 
 ```bash
