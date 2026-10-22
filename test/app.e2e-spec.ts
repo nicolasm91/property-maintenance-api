@@ -3,14 +3,19 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { NotOnboardedError, TokenVerifier } from './../src/auth/token-verifier.js';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
+  const tokenVerifier = { verify: vi.fn() };
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(TokenVerifier)
+      .useValue(tokenVerifier)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -18,6 +23,20 @@ describe('AppController (e2e)', () => {
 
   it('/ (GET)', () => {
     return request(app.getHttpServer()).get('/').expect(200).expect('Hello World!');
+  });
+
+  it('rejects protected routes without a token', () => {
+    return request(app.getHttpServer()).get('/administrations').expect(401);
+  });
+
+  it('rejects users who have not completed onboarding', () => {
+    tokenVerifier.verify.mockRejectedValue(new NotOnboardedError());
+    return request(app.getHttpServer()).get('/administrations').set('Authorization', 'Bearer token').expect(403);
+  });
+
+  it('rejects roles that are not allowed', () => {
+    tokenVerifier.verify.mockResolvedValue({ role: 'tradesman', userId: 'u1' });
+    return request(app.getHttpServer()).get('/properties').set('Authorization', 'Bearer token').expect(403);
   });
 
   afterEach(async () => {

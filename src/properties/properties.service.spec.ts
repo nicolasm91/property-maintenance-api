@@ -1,6 +1,7 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AdministrationsService } from '../administrations/administrations.service.js';
+import { AuthUser } from '../auth/auth-user.js';
 import { Property } from './entities/property.entity.js';
 import { PropertiesService } from './properties.service.js';
 import { PropertiesRepository } from './repositories/properties.repository.js';
@@ -19,6 +20,14 @@ const property: Property = {
   administration: { id: 'a1', name: 'First Administration' },
   createdAt: new Date(),
   updatedAt: new Date(),
+};
+
+const platformOwner: AuthUser = { role: 'platformOwner' };
+const manager: AuthUser = {
+  role: 'propertyManager',
+  userId: 'u1',
+  administrationId: 'a1',
+  administrationRole: 'member',
 };
 
 describe('PropertiesService', () => {
@@ -48,11 +57,14 @@ describe('PropertiesService', () => {
     it('creates a property assigned to an existing administration', async () => {
       repository.create.mockResolvedValue(property);
 
-      await service.create({
-        propertyType: 'building',
-        address,
-        administrationId: 'a1',
-      });
+      await service.create(
+        {
+          propertyType: 'building',
+          address,
+          administrationId: 'a1',
+        },
+        platformOwner,
+      );
 
       expect(administrationsService.findOne).toHaveBeenCalledWith('a1');
       expect(repository.create).toHaveBeenCalledWith({
@@ -63,7 +75,7 @@ describe('PropertiesService', () => {
     });
 
     it('creates a property without administration', async () => {
-      await service.create({ propertyType: 'house', address });
+      await service.create({ propertyType: 'house', address }, platformOwner);
 
       expect(administrationsService.findOne).not.toHaveBeenCalled();
       expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ administrationId: null }));
@@ -73,13 +85,61 @@ describe('PropertiesService', () => {
       administrationsService.findOne.mockRejectedValue(new NotFoundException());
 
       await expect(
-        service.create({
-          propertyType: 'building',
-          address,
-          administrationId: 'missing',
-        }),
+        service.create(
+          {
+            propertyType: 'building',
+            address,
+            administrationId: 'missing',
+          },
+          platformOwner,
+        ),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it("assigns a property manager's property to their own administration", async () => {
+      await service.create({ propertyType: 'building', address }, manager);
+
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ administrationId: 'a1' }));
+    });
+
+    it('throws 403 when a property manager uses another administration', async () => {
+      await expect(
+        service.create({ propertyType: 'building', address, administrationId: 'a2' }, manager),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll', () => {
+    it("restricts a property manager to their own administration's properties", async () => {
+      await service.findAll({}, manager);
+
+      expect(repository.findAll).toHaveBeenCalledWith({ administrationId: 'a1' });
+    });
+
+    it('throws 403 when a property manager filters by another administration', async () => {
+      await expect(service.findAll({ administrationId: 'a2' }, manager)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('lets the platform owner list every property', async () => {
+      await service.findAll({}, platformOwner);
+
+      expect(repository.findAll).toHaveBeenCalledWith({ administrationId: undefined });
+    });
+  });
+
+  describe('findOne', () => {
+    it("returns a property of the property manager's administration", async () => {
+      repository.findById.mockResolvedValue(property);
+
+      await expect(service.findOne('p1', manager)).resolves.toBe(property);
+    });
+
+    it('throws 403 for a property of another administration', async () => {
+      repository.findById.mockResolvedValue({ ...property, administration: { id: 'a2', name: 'Other' } });
+
+      await expect(service.findOne('p1', manager)).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 
@@ -125,7 +185,9 @@ describe('PropertiesService', () => {
     it('throws 404 when the property does not exist', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(service.findAdministrationHistory('missing')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findAdministrationHistory('missing', platformOwner)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });
