@@ -1,7 +1,7 @@
 # System Design Specification — Property Maintenance API
 
 > **Status:** Draft
-> **Last updated:** 2026-10-20
+> **Last updated:** 2026-10-22
 > **Owner:** otsnd
 
 This document collects the system's design decisions. Each section will be completed as requirements are defined. Entries marked `TBD` are pending definition.
@@ -35,6 +35,8 @@ A platform that connects **property administrations** (firms that manage condomi
 | Property                | A house or building where repairs take place. A building knows which property administration it is assigned to.                                                                               |
 | Unit                    | A functional unit (apartment, office, etc.) inside a property.                                                              |
 | Task                    | A repair or maintenance job created by a property manager or a direct client, and assigned to a contractor or directly to a tradesman.                                    |
+| Profile type            | The kind of user a person is in the app (`propertyManager`, `directClient`, `contractor`, `tradesman`). Chosen by the person when they sign up. |
+| Onboarding              | The step after a person's first sign-in in which they choose their profile type and become a User of the app. |
 
 ---
 
@@ -42,7 +44,7 @@ A platform that connects **property administrations** (firms that manage condomi
 
 | Role                       | Description                                                                                 | Main permissions                                                                  |
 | -------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Platform owner             | Owner of the application. Super-roles to be defined later.                                 | Create property administrations and their first `admin` user.                    |
+| Platform owner             | Owner of the application. Super-roles to be defined later.                                 | `TBD`. Administrations and Companies are created by their own users at sign-up.  |
 | Property manager (admin)   | Administrator of a property administration. _Placeholder name._                            | Create and manage the administration's member users. Everything a member can do. |
 | Property manager (member)  | User created by an admin, with restricted permissions. _Placeholder name._                 | Create, assign, and cancel tasks, and view existing tasks (for now).                                   |
 | Direct client              | Private individual requesting repairs for their own home. Not part of any administration.  | Request repairs (create tasks) for their home, choose the contractor or tradesman, and cancel their tasks.                                    |
@@ -53,8 +55,8 @@ Business rules:
 
 - Property administrations are clients. A Company is **not** a property administration.
 - A property manager belongs to exactly one property administration, with an administration role of `admin` or `member`.
-- The first `admin` user of an administration is created by the platform owner (for now).
-- An administration's `admin` user creates `member` users with fewer permissions.
+- A person who signs up as a property manager creates their own administration, and becomes its first `admin`.
+- An administration's `admin` invites people by email to join the administration as `member` (fewer permissions) or as another `admin`.
 - Both `admin` and `member` users can create tasks.
 - Each building is assigned to one property administration at a time, and knows which one it is.
 - A building can change administration over time. The full assignment history is kept.
@@ -77,8 +79,22 @@ Business rules:
 - The tradesman's experience must be minimal: they only see their tasks and mark them as completed.
 - Every task has a title, a description, the trade it requires, and a status.
 - A Company groups one or more contractors. A contractor **must** belong to a Company.
+- A person who signs up as a contractor creates their own Company. Contractors are usually one-person companies, so joining an existing Company is not supported for now.
 - A tradesman can work independently or at the service of **one** contractor at a time (for now).
+- A contractor invites tradesmen by email to work at their service.
 - A tradesman can have more than one trade.
+
+Sign-up rules:
+
+- People sign up and sign in by themselves, with their Google account (SSO). Google is the only sign-in method for now. Nobody creates accounts on their behalf.
+- When signing up, each person chooses the profile type they want to use: property manager, direct client, contractor, or tradesman.
+- If there is a pending invitation for the person's email, they can accept it when signing up instead. The invitation sets their profile type (property manager or tradesman) and links them to the administration or contractor that invited them.
+- People who are already Users can be invited too, and accept or decline the invitation. They can only accept it if it matches their profile type and they are not already in an administration or working for a contractor. In practice, for now: an independent tradesman accepting a contractor's invitation.
+- A property manager belongs to a single administration at a time, and a tradesman works for a single contractor at a time. Leaving an administration or a contractor is not supported for now.
+- Invitations expire. The invited person receives an email when invited.
+- Platform owner (and any future platform super-role) can **never** be chosen at sign-up.
+- Profile types are not expected to change once chosen.
+- A person has a single profile type (for now). Multiple profiles per person may be added later.
 
 ---
 
@@ -88,8 +104,8 @@ Business rules:
 
 | ID     | Description | Priority | Status  |
 | ------ | ----------- | -------- | ------- |
-| FR-001 | The platform owner can create property administrations and their first `admin` user. | `TBD` | Pending |
-| FR-002 | An administration `admin` can create `member` users for their administration. | `TBD` | Pending |
+| FR-001 | A person who signs up as a property manager creates their own administration and becomes its first `admin`. Replaces the former rule (administrations created by the platform owner). | `TBD` | Pending |
+| FR-002 | An administration `admin` can invite people by email to join their administration as `member` or `admin`. | `TBD` | Pending |
 | FR-003 | Property managers (`admin` and `member`) can create tasks for buildings assigned to their administration, assign them, and view existing tasks. | `TBD` | Pending |
 | FR-004 | Direct clients can create tasks for their home and choose the contractor or tradesman. | `TBD` | Pending |
 | FR-005 | A task can be assigned to a contractor or directly to a tradesman. | `TBD` | Pending |
@@ -115,6 +131,15 @@ Business rules:
 | FR-025 | Availability calendar so clients and professionals can agree on a date. | `TBD` | Future |
 | FR-026 | Reschedule a task (change its date), recording a `rescheduled` event. Allowed for the administration or the contractor (administration tasks), and for the direct client or the assigned professional (direct client tasks). | `TBD` | Future |
 | FR-027 | When a direct client's task is rejected, its agreed date is cleared. | `TBD` | Pending |
+| FR-028 | People sign up and sign in with their Google account (SSO, through Auth0). Google is the only sign-in method for now. | `TBD` | Pending |
+| FR-030 | A person who signs up as a contractor creates their own Company. | `TBD` | Pending |
+| FR-031 | A contractor can invite tradesmen by email to work at their service. | `TBD` | Pending |
+| FR-032 | A person with a pending invitation for their email can accept it when signing up. The invitation determines their profile type and what they join. | `TBD` | Pending |
+| FR-033 | Existing Users can be invited, and can accept or decline the invitation, if it matches their profile type and they are not already in an administration or working for a contractor. | `TBD` | Pending |
+| FR-034 | Invitations expire after a validity period (placeholder: 5 minutes). | `TBD` | Pending |
+| FR-035 | The invited person is notified by email when invited. | `TBD` | Pending |
+| FR-036 | In-app notifications (e.g. a notifications dashboard), starting with invitations. | `TBD` | Future |
+| FR-029 | On first sign-in, the person chooses their profile type (property manager, direct client, contractor, or tradesman). Platform owner cannot be chosen. | `TBD` | Pending |
 
 ### 3.2 Non-functional requirements
 
@@ -143,7 +168,7 @@ Business rules:
 | Lint / Format   | oxlint + oxfmt                | Defined |
 | Database        | PostgreSQL (Supabase, used only as a database) | Defined |
 | ORM / Data access | Prisma 7 (`@prisma/adapter-pg`) | Defined |
-| Authentication  | `TBD`                         | Pending |
+| Authentication  | Auth0 (Google SSO). See [Security](#7-security) and ADR-006. | Designed, not implemented |
 | Cache / Queues  | `TBD`                         | Pending |
 | File storage    | `TBD` (files, photos, etc.)   | Pending |
 
@@ -218,6 +243,7 @@ src/properties/
 | Unit                   | A functional unit inside a property.                                |
 | Task                   | A repair or maintenance job.                                        |
 | TaskEvent              | Append-only history of everything that happened to a task.          |
+| Invitation             | Invitation, by email, to join an administration or to work for a contractor. |
 
 #### User
 
@@ -227,7 +253,11 @@ src/properties/
 | `name`       | string |                                                                          |
 | `middleName` | string | Optional.                                                                |
 | `lastName`   | string |                                                                          |
-| `role`       | enum   | `tradesman` \| `contractor` \| `propertyManager` \| `directClient`.     |
+| `role`       | enum   | `tradesman` \| `contractor` \| `propertyManager` \| `directClient`. Chosen at onboarding. |
+| `email`      | string | Unique. Verified email from the identity provider (Google, through Auth0). |
+| `auth0Sub`   | string | Unique. Auth0 user identifier (`sub` claim), links the User to their Auth0 account. |
+
+The platform owner is not a value of `role`: it can never be chosen at sign-up, and how platform owner accounts are granted is deferred (see [Open questions](#12-open-questions)).
 
 Each role has a profile with role-specific fields:
 
@@ -249,8 +279,9 @@ Enum: `electrician`, `handyman`, `plumber`, … (list to be extended).
 
 | Field         | Type | Notes        |
 | ------------- | ---- | ------------ |
-| `id`          | UUID | Primary key. |
-| Payment data  | TBD  | To be defined. |
+| `id`          | UUID   | Primary key. |
+| `name`        | string |              |
+| Payment data  | TBD    | To be defined. |
 
 #### PropertyAdministration
 
@@ -353,6 +384,32 @@ Cancellation rules:
 - A task can be cancelled at any point before it is `completed`.
 - A cancellation **requires** a reason, and is recorded in the task's history.
 
+#### Invitation
+
+| Field                | Type      | Notes                                                                    |
+| -------------------- | --------- | ------------------------------------------------------------------------ |
+| `id`                 | UUID      | Primary key.                                                             |
+| `email`              | string    | Email of the invited person. Matched against the verified email of their Google account. |
+| `type`               | enum      | `administration` \| `contractor`.                                        |
+| `administrationId`   | UUID      | For `administration`. FK → PropertyAdministration.                       |
+| `administrationRole` | enum      | For `administration`. `admin` \| `member`.                               |
+| `contractorId`       | UUID      | For `contractor`. FK → User (contractor).                                |
+| `invitedBy`          | UUID      | FK → User who sent the invitation.                                       |
+| `status`             | enum      | `pending` \| `accepted` \| `declined` \| `revoked`. Expiry is not a stored status: see `expiresAt`. |
+| `createdAt`          | timestamp |                                                                          |
+| `expiresAt`          | timestamp | A `pending` invitation past this date is expired and can no longer be accepted. Validity period: 5 minutes (placeholder). |
+| `acceptedAt`         | timestamp | Optional. Set when accepted.                                             |
+| `acceptedBy`         | UUID      | Optional. FK → User who accepted: created at sign-up, or an existing User. |
+
+Rules:
+
+- An `administration` invitation is sent by an `admin` of that administration. A `contractor` invitation is sent by that contractor.
+- Accepting an invitation at sign-up creates the User with the profile type it implies (`propertyManager` or `tradesman`), in the same transaction that marks it `accepted`.
+- An existing User can accept an invitation only if it matches their profile type and they are not already in an administration (property manager) or working for a contractor (tradesman). Accepting links them to the administration or contractor, in the same transaction that marks it `accepted`.
+- Only `pending`, non-expired invitations can be accepted, declined, or revoked.
+- Expiry is checked when the invitation is read or used, so no background job is needed to expire them.
+- There is at most one `pending` invitation per email and target (administration or contractor).
+
 #### TaskEvent
 
 Append-only history of a task. Every relevant action creates one row, in the same transaction that updates `Task`. Replaces the former `TaskAssignment` entity, which could not record actions on unassigned tasks (e.g. cancelling a task nobody held).
@@ -402,6 +459,8 @@ erDiagram
     Unit |o--o{ Task : has
     Task ||--o{ TaskEvent : history
     User ||--o{ TaskEvent : performs
+    PropertyAdministration ||--o{ Invitation : invites
+    Contractor ||--o{ Invitation : invites
 ```
 
 ### 5.3 States and lifecycles
@@ -457,7 +516,15 @@ Authentication is not implemented yet, so no endpoint enforces its required role
 | Method | Path                                    | Description                                                                  | Required role  |
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
 | GET    | `/health`                               | API and database health.                                                     | None           |
-| POST   | `/administrations`                      | Create a property administration.                                            | Platform owner |
+| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type. A property manager also creates their administration (as `admin`), and a contractor their Company. Only for authenticated callers that are not Users yet. | Authenticated, not onboarded |
+| GET    | `/me`                                   | The caller's User.                                                           | Any User       |
+| GET    | `/me/invitations`                       | Pending, non-expired invitations for the caller's email.                     | Authenticated (onboarded or not) |
+| POST   | `/invitations/:id/accept`               | An existing User accepts an invitation for their email.                      | Invited User   |
+| POST   | `/invitations/:id/decline`              | Decline an invitation for the caller's email.                                | Invited person |
+| POST   | `/administrations/:id/invitations`      | Invite someone by email to the administration as `admin` or `member`.        | `admin` of the administration |
+| POST   | `/contractors/:id/invitations`          | Invite a tradesman by email to work for the contractor.                      | That contractor |
+| DELETE | `/invitations/:id`                      | Revoke a pending invitation.                                                 | Whoever can send it |
+| POST   | `/administrations`                      | Create a property administration. Temporary: with auth, administrations are created at property manager onboarding (`POST /me`). | `TBD`          |
 | GET    | `/administrations`                      | List administrations.                                                        | `TBD`          |
 | GET    | `/administrations/:id`                  | Get an administration.                                                       | `TBD`          |
 | POST   | `/properties`                           | Create a property, optionally assigned to an administration.                 | `TBD`          |
@@ -484,12 +551,63 @@ Standard NestJS error responses:
 
 ## 7. Security
 
-- **Authentication:** `TBD`
-- **Authorization:** `TBD`
+- **Authentication:** Auth0 is the identity provider; people sign in with Google (SSO). The API never handles passwords or Google credentials: it only validates Auth0 access tokens (RS256, checked against the tenant's public keys, issuer, audience, and expiry).
+- **Authorization:** based **only** on the token's claims, with no database lookup per request. See [7.2](#72-token-claims).
 - **Input validation:** `TBD`
 - **Secrets management:** `TBD`
 - **Sensitive data protection:** `TBD`
 - **Rate limiting:** `TBD`
+
+### 7.1 Sign-up and onboarding flow
+
+```mermaid
+sequenceDiagram
+    actor P as Person
+    participant FE as Front end
+    participant A0 as Auth0
+    participant API as API
+    participant DB as Database
+
+    P->>FE: Sign in with Google
+    FE->>A0: Universal Login (Google connection)
+    A0-->>FE: Access token (no profile claims yet)
+    FE->>API: GET /me/invitations
+    API-->>FE: Pending invitations for the email
+    FE->>API: POST /me { invitationId | profile type, name, ... }
+    API->>DB: Create User (role, email, auth0Sub)<br/>+ administration or Company, if applicable
+    API->>A0: Management API: set app_metadata
+    API-->>FE: 201 User
+    FE->>A0: Refresh token
+    A0-->>FE: Access token with profile claims
+    FE->>API: Requests with the new token
+```
+
+1. The person signs in with Google through Auth0's Universal Login. On the first sign-in, Auth0 creates the account, but the person is not a User of the app yet, so the token has no profile claims.
+2. The front end calls `GET /me/invitations`. If there are pending invitations for the person's email, the person can accept one: `POST /me` with the `invitationId` and their personal data.
+   Otherwise, the person chooses their profile type and calls `POST /me` with it and their personal data. A property manager also gives their administration's name, and a contractor their Company's name.
+3. The API creates the User and, in the same transaction, the property manager's administration, the contractor's Company, or the accepted invitation's link. Then it writes the same data to the Auth0 account's `app_metadata` (Management API). The database is the source of truth; `app_metadata` is a copy.
+4. The front end refreshes the token. From then on, a Post-Login Action copies `app_metadata` into the token's claims on every sign-in.
+
+`GET /me/invitations`, `POST /invitations/:id/decline`, and `POST /me` are the only endpoints that accept a token without profile claims. Every other endpoint (except the public ones, such as `/health`) rejects it with `403`.
+
+### 7.2 Token claims
+
+The Post-Login Action adds these namespaced claims, copied from `app_metadata`:
+
+| Claim                | Notes                                                                 |
+| -------------------- | --------------------------------------------------------------------- |
+| `email`              | Verified email of the Google account. Used at onboarding to match invitations. |
+| `userId`             | Our User's `id`, so the API never has to look the User up by `sub`.   |
+| `role`               | Profile type.                                                         |
+| `administrationId`   | Property managers only.                                               |
+| `administrationRole` | Property managers only (`admin` \| `member`).                         |
+
+Rules:
+
+- The API trusts these claims and does not load the User from the database on each request.
+- A change to this data only reaches the token on the next sign-in or refresh. This is accepted because profile types are not expected to change.
+- Changes made by the User themselves (onboarding, accepting an invitation) update `app_metadata` too, and the front end refreshes the token right away.
+- Checks that depend on a resource are made against the resource's own data, not the token. For example, "this building is currently assigned to the caller's administration" compares `Property.administrationId` with the `administrationId` claim, since buildings do change administration.
 
 ---
 
@@ -497,7 +615,8 @@ Standard NestJS error responses:
 
 | Service | Purpose | Integration type |
 | ------- | ------- | ---------------- |
-| `TBD`   | `TBD`   | `TBD`            |
+| Email provider (`TBD`) | Transactional email: invitations. | `TBD` |
+| Auth0   | Identity provider: sign-in with Google (SSO), access tokens. | Universal Login (front end), JWKS token validation, Management API (`app_metadata`), Post-Login Action. |
 
 ---
 
@@ -542,6 +661,7 @@ Standard NestJS error responses:
 | ADR-003 | 2026-10-21 | Naming: `camelCase` in code and API, `snake_case` in the database (tables and columns, via Prisma `@map`). Primary keys are named `id` (UUID). | Accepted |
 | ADR-004 | 2026-10-21 | Invariants Prisma cannot express are enforced in hand-written migration SQL. First case: a partial unique index guaranteeing at most one open `AdministrationAssignment` per property. | Accepted |
 | ADR-005 | 2026-10-21 | Standard NestJS layering (Controller → Service → Repository) with repositories defined as interfaces. Only repository implementations (`repositories/prisma/`) may use Prisma, enforced by lint rules. Goal: the database is not tied to a concrete implementation. | Accepted |
+| ADR-006 | 2026-10-22 | Use Auth0 as identity provider, with Google SSO. People sign up by themselves and choose their profile type at onboarding. The User's profile data lives in our database (source of truth), is copied to Auth0 `app_metadata`, and reaches the token as claims through a Post-Login Action. The API authorizes from the claims alone, without a database lookup per request; stale claims are accepted because profile types are not expected to change. | Accepted |
 
 ---
 
@@ -555,8 +675,15 @@ Domain model:
 - [ ] Can a home be shared by more than one direct client in the future? (Currently 1:1.)
 - [ ] Is `Unit.managerId` a property manager, a direct client, or a unit owner/tenant? _To be defined with the product team._
 - [ ] Payment data for `Company` and `PropertyAdministration`.
+- [ ] Invitation validity period (5 minutes is a placeholder).
 
 Deferred (not part of the current business-focused design phase):
 
 - [ ] Who can change a building's administration (platform owner, the new administration, the old one)?
+- [ ] How platform owner accounts are granted (they can never be chosen at sign-up).
+- [ ] Contractors joining an existing Company (contractors are usually one-person companies).
+- [ ] In-app notifications (FR-036): wait until there is a front end.
+- [ ] Leaving an administration or a contractor (and what happens to an administration left without `admin`s, or to a tradesman's open tasks).
+- [ ] Email provider for transactional email.
+- [ ] Multiple profile types per person (e.g. a tradesman who is also a direct client). Single profile for now; may be added later.
 - [ ] Until the availability calendar exists, how does a direct client's task get its date? (e.g. agreed outside the app and entered by the client or the professional, or left empty.)
