@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { AuthUser } from '../auth/auth-user.js';
 import { Administration } from './entities/administration.entity.js';
 import { CreateAdministrationDto } from './dto/create-administration.dto.js';
 import { AdministrationsRepository } from './repositories/administrations.repository.js';
@@ -21,5 +22,12 @@ export class AdministrationsService {
       throw new NotFoundException(`Administration ${id} not found`);
     }
     return administration;
+  }
+
+  async findOneForUser(id: string, user: AuthUser): Promise<Administration> {
+    if (user.role !== 'platformOwner' && !(user.role === 'propertyManager' && user.administrationId === id)) {
+      throw new ForbiddenException();
+    }
+    return this.findOne(id);
   }
 }

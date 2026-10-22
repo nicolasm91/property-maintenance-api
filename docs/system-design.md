@@ -168,7 +168,7 @@ Sign-up rules:
 | Lint / Format   | oxlint + oxfmt                | Defined |
 | Database        | PostgreSQL (Supabase, used only as a database) | Defined |
 | ORM / Data access | Prisma 7 (`@prisma/adapter-pg`) | Defined |
-| Authentication  | Auth0 (Google SSO). See [Security](#7-security) and ADR-006. | Designed, not implemented |
+| Authentication  | Auth0 (Google SSO). See [Security](#7-security) and ADR-006. | Token validation and authorization implemented; onboarding and invitations pending |
 | Cache / Queues  | `TBD`                         | Pending |
 | File storage    | `TBD` (files, photos, etc.)   | Pending |
 
@@ -205,6 +205,7 @@ flowchart LR
 | `prisma`          | Prisma client (`PrismaService`).                                    | None              |
 | `administrations` | Property administrations.                                           | `prisma`          |
 | `properties`      | Properties and their administration assignment history.            | `prisma`, `administrations` |
+| `auth`            | Global guard: validates the access token and the `@Roles` of each route. `@Public()`, `@Roles()`, `@CurrentUser()`. | None              |
 | `health`          | `GET /health`.                                                      | `prisma`          |
 
 Layout of a module:
@@ -511,7 +512,7 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 
 ### 6.2 Endpoints
 
-Authentication is not implemented yet, so no endpoint enforces its required role for now.
+Every endpoint requires a valid access token unless its required role is "None". Onboarding and invitation endpoints are designed but not implemented yet.
 
 | Method | Path                                    | Description                                                                  | Required role  |
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
@@ -524,14 +525,14 @@ Authentication is not implemented yet, so no endpoint enforces its required role
 | POST   | `/administrations/:id/invitations`      | Invite someone by email to the administration as `admin` or `member`.        | `admin` of the administration |
 | POST   | `/contractors/:id/invitations`          | Invite a tradesman by email to work for the contractor.                      | That contractor |
 | DELETE | `/invitations/:id`                      | Revoke a pending invitation.                                                 | Whoever can send it |
-| POST   | `/administrations`                      | Create a property administration. Temporary: with auth, administrations are created at property manager onboarding (`POST /me`). | `TBD`          |
-| GET    | `/administrations`                      | List administrations.                                                        | `TBD`          |
-| GET    | `/administrations/:id`                  | Get an administration.                                                       | `TBD`          |
-| POST   | `/properties`                           | Create a property, optionally assigned to an administration.                 | `TBD`          |
-| GET    | `/properties?administrationId=`         | List properties. Optional filter: buildings currently assigned to an administration. | `TBD`          |
-| GET    | `/properties/:id`                       | Get a property with its current administration.                              | `TBD`          |
-| PUT    | `/properties/:id/administration`        | Change the property's administration (closes the current assignment, opens a new one). | Deferred (see [Open questions](#12-open-questions)) |
-| GET    | `/properties/:id/administration-history`| Administration assignment history, newest first.                             | `TBD`          |
+| POST   | `/administrations`                      | Create a property administration. Temporary: with auth, administrations are created at property manager onboarding (`POST /me`). | Platform owner |
+| GET    | `/administrations`                      | List administrations.                                                        | Platform owner |
+| GET    | `/administrations/:id`                  | Get an administration.                                                       | Platform owner, or a property manager of that administration |
+| POST   | `/properties`                           | Create a property, optionally assigned to an administration.                 | Platform owner (any administration), or a property manager (always their own administration) |
+| GET    | `/properties?administrationId=`         | List properties. Optional filter: buildings currently assigned to an administration. | Platform owner (all), or a property manager (only their administration's) |
+| GET    | `/properties/:id`                       | Get a property with its current administration.                              | Platform owner, or a property manager if the building is currently assigned to their administration |
+| PUT    | `/properties/:id/administration`        | Change the property's administration (closes the current assignment, opens a new one). | Platform owner, until it is defined (see [Open questions](#12-open-questions)) |
+| GET    | `/properties/:id/administration-history`| Administration assignment history, newest first.                             | Same as `GET /properties/:id` |
 
 ### 6.3 Error format
 
@@ -544,6 +545,8 @@ Standard NestJS error responses:
 | Status | When                                                                                         |
 | ------ | -------------------------------------------------------------------------------------------- |
 | 400    | Invalid request: wrong types, unknown fields, blank required values, invalid UUIDs.          |
+| 401    | Missing, invalid, or expired access token.                                                   |
+| 403    | Valid token, but the caller has not completed onboarding, their role is not allowed, or the resource belongs to another administration. |
 | 404    | A referenced property or administration does not exist.                                      |
 | 409    | Business conflict (e.g. assigning the administration a property already has), or a concurrent change on the same property (retryable). |
 
@@ -601,6 +604,8 @@ The Post-Login Action adds these namespaced claims, copied from `app_metadata`:
 | `role`               | Profile type.                                                         |
 | `administrationId`   | Property managers only.                                               |
 | `administrationRole` | Property managers only (`admin` \| `member`).                         |
+
+The `role` claim can also be `platformOwner`. It is set by hand in the account's `app_metadata` (with no `userId`, since the platform owner is not a User), until platform super-roles are designed.
 
 Rules:
 
