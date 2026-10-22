@@ -18,9 +18,17 @@ export type AuthUser =
     }
   | { role: 'directClient' | 'contractor' | 'tradesman'; userId: string };
 
+// Who the caller is in Auth0, available even before onboarding.
+export interface Identity {
+  sub: string;
+  // Only set when the email is verified (see the Post-Login Action).
+  email: string | null;
+}
+
 declare global {
   namespace Express {
     interface Request {
+      identity?: Identity;
       user?: AuthUser;
     }
   }
