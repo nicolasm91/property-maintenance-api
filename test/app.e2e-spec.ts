@@ -3,7 +3,8 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
-import { NotOnboardedError, TokenVerifier } from './../src/auth/token-verifier.js';
+import { IdentityProvider } from './../src/auth/identity-provider.js';
+import { TokenVerifier } from './../src/auth/token-verifier.js';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -15,6 +16,8 @@ describe('AppController (e2e)', () => {
     })
       .overrideProvider(TokenVerifier)
       .useValue(tokenVerifier)
+      .overrideProvider(IdentityProvider)
+      .useValue({ setProfileMetadata: vi.fn() })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -30,12 +33,15 @@ describe('AppController (e2e)', () => {
   });
 
   it('rejects users who have not completed onboarding', () => {
-    tokenVerifier.verify.mockRejectedValue(new NotOnboardedError());
+    tokenVerifier.verify.mockResolvedValue({ identity: { sub: 'google-oauth2|1', email: null }, user: null });
     return request(app.getHttpServer()).get('/administrations').set('Authorization', 'Bearer token').expect(403);
   });
 
   it('rejects roles that are not allowed', () => {
-    tokenVerifier.verify.mockResolvedValue({ role: 'tradesman', userId: 'u1' });
+    tokenVerifier.verify.mockResolvedValue({
+      identity: { sub: 'google-oauth2|1', email: null },
+      user: { role: 'tradesman', userId: 'u1' },
+    });
     return request(app.getHttpServer()).get('/properties').set('Authorization', 'Bearer token').expect(403);
   });
 

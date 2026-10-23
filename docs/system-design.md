@@ -87,7 +87,7 @@ Business rules:
 Sign-up rules:
 
 - People sign up and sign in by themselves, with their Google account (SSO). Google is the only sign-in method for now. Nobody creates accounts on their behalf.
-- When signing up, each person chooses the profile type they want to use: property manager, direct client, contractor, or tradesman.
+- When signing up, each person chooses the profile type they want to use: property manager, contractor, or tradesman. Direct client cannot be chosen for now.
 - If there is a pending invitation for the person's email, they can accept it when signing up instead. The invitation sets their profile type (property manager or tradesman) and links them to the administration or contractor that invited them.
 - People who are already Users can be invited too, and accept or decline the invitation. They can only accept it if it matches their profile type and they are not already in an administration or working for a contractor. In practice, for now: an independent tradesman accepting a contractor's invitation.
 - A property manager belongs to a single administration at a time, and a tradesman works for a single contractor at a time. Leaving an administration or a contractor is not supported for now.
@@ -139,7 +139,7 @@ Sign-up rules:
 | FR-034 | Invitations expire after a validity period (placeholder: 5 minutes). | `TBD` | Pending |
 | FR-035 | The invited person is notified by email when invited. | `TBD` | Pending |
 | FR-036 | In-app notifications (e.g. a notifications dashboard), starting with invitations. | `TBD` | Future |
-| FR-029 | On first sign-in, the person chooses their profile type (property manager, direct client, contractor, or tradesman). Platform owner cannot be chosen. | `TBD` | Pending |
+| FR-029 | On first sign-in, the person chooses their profile type (property manager, contractor, or tradesman). Platform owner cannot be chosen; direct client cannot be chosen for now. | `TBD` | Pending |
 
 ### 3.2 Non-functional requirements
 
@@ -168,7 +168,7 @@ Sign-up rules:
 | Lint / Format   | oxlint + oxfmt                | Defined |
 | Database        | PostgreSQL (Supabase, used only as a database) | Defined |
 | ORM / Data access | Prisma 7 (`@prisma/adapter-pg`) | Defined |
-| Authentication  | Auth0 (Google SSO). See [Security](#7-security) and ADR-006. | Token validation and authorization implemented; onboarding and invitations pending |
+| Authentication  | Auth0 (Google SSO). See [Security](#7-security) and ADR-006. | Token validation, authorization, and onboarding implemented; invitations pending |
 | Cache / Queues  | `TBD`                         | Pending |
 | File storage    | `TBD` (files, photos, etc.)   | Pending |
 
@@ -206,6 +206,7 @@ flowchart LR
 | `administrations` | Property administrations.                                           | `prisma`          |
 | `properties`      | Properties and their administration assignment history.            | `prisma`, `administrations` |
 | `auth`            | Global guard: validates the access token and the `@Roles` of each route. `@Public()`, `@Roles()`, `@CurrentUser()`. | None              |
+| `users`           | Users and their profiles. Onboarding (`POST /me`) and `GET /me`.    | `prisma`, `auth`  |
 | `health`          | `GET /health`.                                                      | `prisma`          |
 
 Layout of a module:
@@ -264,7 +265,7 @@ Each role has a profile with role-specific fields:
 
 | Profile         | Field                | Type | Notes                                                                 |
 | --------------- | -------------------- | ---- | --------------------------------------------------------------------- |
-| Tradesman       | `trades`             | enum[] | One or more trades. See [Trade](#trade).                            |
+| Tradesman       | `trades`             | enum[] | Zero or more trades. See [Trade](#trade).                           |
 | Tradesman       | `contractorId`       | UUID | Optional. FK → User (contractor). Empty for independent tradesmen. A tradesman works for **one contractor at a time** (for now). |
 | Contractor      | `companyId`          | UUID | **Required.** FK → Company.                                           |
 | PropertyManager | `administrationId`   | UUID | **Required.** FK → PropertyAdministration.                            |
@@ -274,7 +275,7 @@ A direct client can have several homes. The link is stored on the home itself (`
 
 #### Trade
 
-Enum: `electrician`, `handyman`, `plumber`, … (list to be extended).
+Enum: `electrician`, `handyman`, `plumber`, `mason` (list to be extended). A tradesman may choose them at onboarding (optional).
 
 #### Company
 
@@ -512,13 +513,13 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 
 ### 6.2 Endpoints
 
-Every endpoint requires a valid access token unless its required role is "None". Onboarding and invitation endpoints are designed but not implemented yet.
+Every endpoint requires a valid access token unless its required role is "None". Invitation endpoints are designed but not implemented yet.
 
 | Method | Path                                    | Description                                                                  | Required role  |
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
 | GET    | `/health`                               | API and database health.                                                     | None           |
-| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type. A property manager also creates their administration (as `admin`), and a contractor their Company. Only for authenticated callers that are not Users yet. | Authenticated, not onboarded |
-| GET    | `/me`                                   | The caller's User.                                                           | Any User       |
+| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A property manager also creates their administration (`administrationName`, as `admin`), a contractor their Company (`companyName`), and a tradesman may give their `trades`. `directClient` cannot be chosen for now. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
+| GET    | `/me`                                   | The caller's User. `404` before onboarding.                                  | Authenticated (onboarded or not) |
 | GET    | `/me/invitations`                       | Pending, non-expired invitations for the caller's email.                     | Authenticated (onboarded or not) |
 | POST   | `/invitations/:id/accept`               | An existing User accepts an invitation for their email.                      | Invited User   |
 | POST   | `/invitations/:id/decline`              | Decline an invitation for the caller's email.                                | Invited person |
@@ -585,21 +586,23 @@ sequenceDiagram
     FE->>API: Requests with the new token
 ```
 
-1. The person signs in with Google through Auth0's Universal Login. On the first sign-in, Auth0 creates the account, but the person is not a User of the app yet, so the token has no profile claims.
+1. The person signs in with Google through Auth0's Universal Login. On the first sign-in, Auth0 creates the account, but the person is not a User of the app yet, so the token has no profile claims. The front end calls `GET /me`, which returns `404` until onboarding is completed.
 2. The front end calls `GET /me/invitations`. If there are pending invitations for the person's email, the person can accept one: `POST /me` with the `invitationId` and their personal data.
    Otherwise, the person chooses their profile type and calls `POST /me` with it and their personal data. A property manager also gives their administration's name, and a contractor their Company's name.
 3. The API creates the User and, in the same transaction, the property manager's administration, the contractor's Company, or the accepted invitation's link. Then it writes the same data to the Auth0 account's `app_metadata` (Management API). The database is the source of truth; `app_metadata` is a copy.
-4. The front end refreshes the token. From then on, a Post-Login Action copies `app_metadata` into the token's claims on every sign-in.
+4. The front end gets a new token (also through the refresh token). From then on, a Post-Login Action copies `app_metadata` into the token's claims on every sign-in and token refresh.
 
-`GET /me/invitations`, `POST /invitations/:id/decline`, and `POST /me` are the only endpoints that accept a token without profile claims. Every other endpoint (except the public ones, such as `/health`) rejects it with `403`.
+If writing `app_metadata` fails after the User is saved, `POST /me` returns `502`. Retrying it finds the existing User and writes `app_metadata` again, so the person is never stuck with a User but no claims.
+
+`GET /me`, `POST /me`, `GET /me/invitations`, and `POST /invitations/:id/decline` are the only endpoints that accept a token without profile claims. Every other endpoint (except the public ones, such as `/health`) rejects it with `403`.
 
 ### 7.2 Token claims
 
-The Post-Login Action adds these namespaced claims, copied from `app_metadata`:
+The Post-Login Action (source in `auth0/actions/add-profile-claims.js`) adds these namespaced claims, copied from `app_metadata`:
 
 | Claim                | Notes                                                                 |
 | -------------------- | --------------------------------------------------------------------- |
-| `email`              | Verified email of the Google account. Used at onboarding to match invitations. |
+| `email`              | Email of the Google account, only if verified. Stored on the User at onboarding; later used to match invitations. |
 | `userId`             | Our User's `id`, so the API never has to look the User up by `sub`.   |
 | `role`               | Profile type.                                                         |
 | `administrationId`   | Property managers only.                                               |

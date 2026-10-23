@@ -1,11 +1,14 @@
-import { AuthUser } from './auth-user.js';
+import { AuthUser, Identity } from './auth-user.js';
 
 export class InvalidTokenError extends Error {}
 
-// A valid token of someone who hasn't completed onboarding yet (no profile claims).
-export class NotOnboardedError extends Error {}
+export interface VerifiedToken {
+  identity: Identity;
+  // Null until the caller completes onboarding (the token has no profile claims).
+  user: AuthUser | null;
+}
 
 export abstract class TokenVerifier {
-  // Throws InvalidTokenError or NotOnboardedError.
-  abstract verify(token: string): Promise<AuthUser>;
+  // Throws InvalidTokenError.
+  abstract verify(token: string): Promise<VerifiedToken>;
 }

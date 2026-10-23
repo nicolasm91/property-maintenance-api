@@ -22,6 +22,7 @@ model PropertyAdministration {
 
   properties  Property[]
   assignments AdministrationAssignment[]
+  managers    PropertyManager[]
 
   @@map("property_administrations")
 }
@@ -60,4 +61,94 @@ model AdministrationAssignment {
   @@index([propertyId])
   @@index([administrationId])
   @@map("administration_assignments")
+}
+
+enum UserRole {
+  propertyManager
+  directClient
+  contractor
+  tradesman
+
+  @@map("user_role")
+}
+
+enum AdministrationRole {
+  admin
+  member
+
+  @@map("administration_role")
+}
+
+enum Trade {
+  electrician
+  handyman
+  plumber
+  mason
+
+  @@map("trade")
+}
+
+model User {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  auth0Sub   String   @unique @map("auth0_sub")
+  email      String   @unique
+  name       String
+  middleName String?  @map("middle_name")
+  lastName   String   @map("last_name")
+  role       UserRole
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  propertyManager PropertyManager?
+  contractor      Contractor?
+  tradesman       Tradesman?
+
+  @@map("users")
+}
+
+model PropertyManager {
+  userId             String             @id @map("user_id") @db.Uuid
+  administrationId   String             @map("administration_id") @db.Uuid
+  administrationRole AdministrationRole @map("administration_role")
+
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  administration PropertyAdministration @relation(fields: [administrationId], references: [id])
+
+  @@index([administrationId])
+  @@map("property_managers")
+}
+
+model Company {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  contractors Contractor[]
+
+  @@map("companies")
+}
+
+model Contractor {
+  userId    String @id @map("user_id") @db.Uuid
+  companyId String @map("company_id") @db.Uuid
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company     @relation(fields: [companyId], references: [id])
+  tradesmen Tradesman[]
+
+  @@index([companyId])
+  @@map("contractors")
+}
+
+model Tradesman {
+  userId       String  @id @map("user_id") @db.Uuid
+  trades       Trade[]
+  contractorId String? @map("contractor_id") @db.Uuid
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractor Contractor? @relation(fields: [contractorId], references: [userId])
+
+  @@index([contractorId])
+  @@map("tradesmen")
 }

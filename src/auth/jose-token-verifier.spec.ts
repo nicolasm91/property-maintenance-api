@@ -1,6 +1,6 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, type JWTPayload, SignJWT } from 'jose';
 import { CLAIMS_NAMESPACE, JoseTokenVerifier } from './jose-token-verifier.js';
-import { InvalidTokenError, NotOnboardedError } from './token-verifier.js';
+import { InvalidTokenError } from './token-verifier.js';
 
 const issuer = 'https://tenant.example.com/';
 const audience = 'https://property-maintenance-api';
@@ -39,26 +39,28 @@ describe('JoseTokenVerifier', () => {
     });
 
     await expect(verifier.verify(token)).resolves.toEqual({
-      role: 'propertyManager',
-      userId: 'u1',
-      administrationId: 'a1',
-      administrationRole: 'admin',
+      identity: { sub: 'google-oauth2|123', email: null },
+      user: { role: 'propertyManager', userId: 'u1', administrationId: 'a1', administrationRole: 'admin' },
     });
   });
 
   it('maps the platform owner without userId', async () => {
-    await expect(verifier.verify(await sign({ role: 'platformOwner' }))).resolves.toEqual({ role: 'platformOwner' });
-  });
-
-  it('maps other profiles with their userId', async () => {
-    await expect(verifier.verify(await sign({ role: 'tradesman', userId: 'u2' }))).resolves.toEqual({
-      role: 'tradesman',
-      userId: 'u2',
+    await expect(verifier.verify(await sign({ role: 'platformOwner' }))).resolves.toMatchObject({
+      user: { role: 'platformOwner' },
     });
   });
 
-  it('rejects a token without role as not onboarded', async () => {
-    await expect(verifier.verify(await sign({}))).rejects.toBeInstanceOf(NotOnboardedError);
+  it('maps other profiles with their userId', async () => {
+    await expect(verifier.verify(await sign({ role: 'tradesman', userId: 'u2' }))).resolves.toMatchObject({
+      user: { role: 'tradesman', userId: 'u2' },
+    });
+  });
+
+  it('returns only the identity for a token without profile claims', async () => {
+    await expect(verifier.verify(await sign({ email: 'ana@example.com' }))).resolves.toEqual({
+      identity: { sub: 'google-oauth2|123', email: 'ana@example.com' },
+      user: null,
+    });
   });
 
   it.each([

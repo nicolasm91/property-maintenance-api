@@ -2,9 +2,10 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Unauthor
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { Role } from './auth-user.js';
+import { ALLOW_NOT_ONBOARDED_KEY } from './decorators/allow-not-onboarded.decorator.js';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator.js';
 import { ROLES_KEY } from './decorators/roles.decorator.js';
-import { InvalidTokenError, NotOnboardedError, TokenVerifier } from './token-verifier.js';
+import { InvalidTokenError, TokenVerifier, VerifiedToken } from './token-verifier.js';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -25,17 +26,24 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
 
+    let verified: VerifiedToken;
     try {
-      request.user = await this.tokenVerifier.verify(token);
+      verified = await this.tokenVerifier.verify(token);
     } catch (error) {
       if (error instanceof InvalidTokenError) {
         throw new UnauthorizedException('Invalid token');
       }
-      if (error instanceof NotOnboardedError) {
-        throw new ForbiddenException('Onboarding not completed');
-      }
       throw error;
     }
+    request.identity = verified.identity;
+
+    if (!verified.user) {
+      if (this.reflector.getAllAndOverride<boolean>(ALLOW_NOT_ONBOARDED_KEY, targets)) {
+        return true;
+      }
+      throw new ForbiddenException('Onboarding not completed');
+    }
+    request.user = verified.user;
 
     const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, targets);
     if (roles && !roles.includes(request.user.role)) {

@@ -1,0 +1,146 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { Identity } from '../auth/auth-user.js';
+import { IdentityProvider } from '../auth/identity-provider.js';
+import { User } from './entities/user.entity.js';
+import { UsersRepository } from './repositories/users.repository.js';
+import { UsersService } from './users.service.js';
+
+const identity: Identity = { sub: 'google-oauth2|123', email: 'ana@example.com' };
+
+const base = {
+  id: 'u1',
+  email: 'ana@example.com',
+  name: 'Ana',
+  middleName: null,
+  lastName: 'García',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+const manager: User = {
+  ...base,
+  role: 'propertyManager',
+  administration: { id: 'a1', name: 'Admin Ana' },
+  administrationRole: 'admin',
+};
+
+describe('UsersService', () => {
+  let service: UsersService;
+  const repository = { findByAuth0Sub: vi.fn(), create: vi.fn() };
+  const identityProvider = { setProfileMetadata: vi.fn() };
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [
+        UsersService,
+        { provide: UsersRepository, useValue: repository },
+        { provide: IdentityProvider, useValue: identityProvider },
+      ],
+    }).compile();
+    service = module.get(UsersService);
+  });
+
+  describe('onboard', () => {
+    it('creates a property manager with their administration and syncs the claims', async () => {
+      repository.findByAuth0Sub.mockResolvedValue(null);
+      repository.create.mockResolvedValue(manager);
+
+      await expect(
+        service.onboard(identity, {
+          profileType: 'propertyManager',
+          name: 'Ana',
+          middleName: '',
+          lastName: 'García',
+          administrationName: 'Admin Ana',
+        }),
+      ).resolves.toBe(manager);
+
+      expect(repository.create).toHaveBeenCalledWith({
+        auth0Sub: identity.sub,
+        email: identity.email,
+        name: 'Ana',
+        middleName: null,
+        lastName: 'García',
+        profile: { role: 'propertyManager', administrationName: 'Admin Ana' },
+      });
+      expect(identityProvider.setProfileMetadata).toHaveBeenCalledWith(identity.sub, {
+        userId: 'u1',
+        role: 'propertyManager',
+        administrationId: 'a1',
+        administrationRole: 'admin',
+      });
+    });
+
+    it('creates a tradesman with their trades', async () => {
+      repository.findByAuth0Sub.mockResolvedValue(null);
+      repository.create.mockResolvedValue({ ...base, role: 'tradesman', trades: ['plumber'], contractorId: null });
+
+      await service.onboard(identity, {
+        profileType: 'tradesman',
+        name: 'Ana',
+        lastName: 'García',
+        trades: ['plumber'],
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ profile: { role: 'tradesman', trades: ['plumber'] } }),
+      );
+      expect(identityProvider.setProfileMetadata).toHaveBeenCalledWith(identity.sub, {
+        userId: 'u1',
+        role: 'tradesman',
+      });
+    });
+
+    it('creates a tradesman without trades', async () => {
+      repository.findByAuth0Sub.mockResolvedValue(null);
+      repository.create.mockResolvedValue({ ...base, role: 'tradesman', trades: [], contractorId: null });
+
+      await service.onboard(identity, { profileType: 'tradesman', name: 'Ana', lastName: 'García' });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ profile: { role: 'tradesman', trades: [] } }),
+      );
+    });
+
+    it('re-syncs the claims of an existing User instead of creating another', async () => {
+      repository.findByAuth0Sub.mockResolvedValue(manager);
+
+      await expect(
+        service.onboard(identity, {
+          profileType: 'contractor',
+          name: 'Ana',
+          lastName: 'García',
+          companyName: 'Ana SRL',
+        }),
+      ).resolves.toBe(manager);
+
+      expect(repository.create).not.toHaveBeenCalled();
+      expect(identityProvider.setProfileMetadata).toHaveBeenCalledWith(
+        identity.sub,
+        expect.objectContaining({ role: 'propertyManager' }),
+      );
+    });
+
+    it('throws 403 without a verified email', async () => {
+      repository.findByAuth0Sub.mockResolvedValue(null);
+
+      await expect(
+        service.onboard(
+          { ...identity, email: null },
+          { profileType: 'contractor', name: 'Ana', lastName: 'García', companyName: 'Ana SRL' },
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findMe', () => {
+    it('throws 404 before onboarding', async () => {
+      repository.findByAuth0Sub.mockResolvedValue(null);
+
+      await expect(service.findMe(identity)).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+});
