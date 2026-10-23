@@ -1,0 +1,28 @@
+# Local development stack. Expects the web app cloned next to this repo
+# (../property-maintenance-web). The database is Supabase, so it is not a service here.
+name: property-maintenance
+
+services:
+  api:
+    build:
+      context: .
+      target: dev
+    env_file: .env
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/app
+      # Keeps the container's node_modules instead of the host's.
+      - /app/node_modules
+
+  web:
+    build:
+      context: ../property-maintenance-web
+      target: dev
+    ports:
+      - '5173:5173'
+    volumes:
+      - ../property-maintenance-web:/app
+      - /app/node_modules
+    depends_on:
+      - api
