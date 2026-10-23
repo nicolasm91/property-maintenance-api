@@ -60,3 +60,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Prisma generated client
 /src/prisma/generated
+
+# Auth0 credentials
+.auth0-mcp-state.json
+
+.auth0-mcp-writes.log
