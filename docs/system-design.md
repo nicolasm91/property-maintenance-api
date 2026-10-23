@@ -37,6 +37,8 @@ A platform that connects **property administrations** (firms that manage condomi
 | Task                    | A repair or maintenance job created by a property manager or a direct client, and assigned to a contractor or directly to a tradesman.                                    |
 | Profile type            | The kind of user a person is in the app (`propertyManager`, `directClient`, `contractor`, `tradesman`). Chosen by the person when they sign up. |
 | Onboarding              | The step after a person's first sign-in in which they choose their profile type and become a User of the app. |
+| Slot                    | A 30-minute period, starting on the hour or half hour between 07:00 and 18:30, in which a task can be scheduled. A direct client books a tradesman by picking one of their free slots. |
+| Agenda                  | A tradesman's scheduled tasks, ordered by date.                                                                             |
 
 ---
 
@@ -47,9 +49,9 @@ A platform that connects **property administrations** (firms that manage condomi
 | Platform owner             | Owner of the application. Super-roles to be defined later.                                 | `TBD`. Administrations and Companies are created by their own users at sign-up.  |
 | Property manager (admin)   | Administrator of a property administration. _Placeholder name._                            | Create and manage the administration's member users. Everything a member can do. |
 | Property manager (member)  | User created by an admin, with restricted permissions. _Placeholder name._                 | Create, assign, and cancel tasks, and view existing tasks (for now).                                   |
-| Direct client              | Private individual requesting repairs for their own home. Not part of any administration.  | Request repairs (create tasks) for their home, choose the contractor or tradesman, and cancel their tasks.                                    |
+| Direct client              | Private individual requesting repairs for their own home. Not part of any administration.  | Register their home, search tradesmen by trade, book a slot with one (which creates a task for their home), and cancel their tasks. |
 | Contractor                 | Belongs to a Company. Receives tasks and has tradesmen at their service.                   | Receive tasks, assign or reassign them to one of their tradesmen, reject them, or mark them as completed. |
-| Tradesman                  | Performs repair work in one or more trades, independently or at the service of a contractor. | View their tasks, mark them as completed, and reject tasks assigned to them directly. |
+| Tradesman                  | Performs repair work in one or more trades, independently or at the service of a contractor. | View their agenda (their tasks), mark tasks as completed, reject tasks assigned to them directly, and update their trades. |
 
 Business rules:
 
@@ -64,15 +66,17 @@ Business rules:
 - When a building changes administration, the new administration can view the tasks managed by previous administrations, so it can follow the management history. The previous administration loses access to the building's tasks.
 - An administration can have more than one `admin`.
 - Open (not completed) tasks remain visible to the new administration, which continues managing them.
-- Direct clients do not belong to any administration; they request repairs for their own home and choose the contractor or tradesman themselves.
+- Direct clients do not belong to any administration; they request repairs for their own home by booking a tradesman themselves.
+- A direct client searches independent tradesmen by trade and books one of their free slots. Booking creates a task for the client's home, assigned directly to that tradesman. Booking a contractor is not supported for now.
+- A tradesman can never have two tasks in the same slot. See [Agenda and collision rules](#task).
 - A direct client can have more than one home. Each home belongs to exactly one direct client (for now).
 - A task can be assigned to a contractor or directly to a tradesman.
 - When a task is assigned to a contractor, the contractor must assign it to one of their tradesmen.
 - A contractor can reject a task, or reassign it to another of their tradesmen.
 - A tradesman can reject a task only if it was assigned to them directly.
 - A task can be rejected at any point before it is completed or cancelled. A rejected task becomes unassigned, so another professional can be picked. Its date is kept for administration tasks, and cleared for direct client tasks. The rejection can include a reason (optional, for now).
-- The administration sets the task's date when creating it, before handing it to the contractor. A direct client agrees the date with the professional instead.
-- Tasks will be reschedulable in the future, backed by an availability calendar. Administration tasks can be rescheduled by the administration or the contractor; direct client tasks by the direct client or the assigned professional.
+- The administration sets the task's date when creating it, before handing it to the contractor. A direct client sets it by booking a slot of the tradesman.
+- Tasks will be reschedulable in the future. Administration tasks can be rescheduled by the administration or the contractor; direct client tasks by the direct client or the assigned professional.
 - A task can be marked as completed by its tradesman or by the contractor who holds it.
 - A task on an administration's building can be cancelled by any property manager of that administration. A direct client's task can be cancelled by that direct client. A cancellation requires a reason.
 - The full history of a task (creation, assignments, reassignments, rejections, completion, cancellation) is kept, including who did each action.
@@ -87,7 +91,8 @@ Business rules:
 Sign-up rules:
 
 - People sign up and sign in by themselves, with their Google account (SSO). Google is the only sign-in method for now. Nobody creates accounts on their behalf.
-- When signing up, each person chooses the profile type they want to use: property manager, contractor, or tradesman. Direct client cannot be chosen for now.
+- When signing up, each person chooses the profile type they want to use: property manager, direct client, contractor, or tradesman.
+- A direct client registers their first home when signing up.
 - If there is a pending invitation for the person's email, they can accept it when signing up instead. The invitation sets their profile type (property manager or tradesman) and links them to the administration or contractor that invited them.
 - People who are already Users can be invited too, and accept or decline the invitation. They can only accept it if it matches their profile type and they are not already in an administration or working for a contractor. In practice, for now: an independent tradesman accepting a contractor's invitation.
 - A property manager belongs to a single administration at a time, and a tradesman works for a single contractor at a time. Leaving an administration or a contractor is not supported for now.
@@ -107,10 +112,10 @@ Sign-up rules:
 | FR-001 | A person who signs up as a property manager creates their own administration and becomes its first `admin`. Replaces the former rule (administrations created by the platform owner). | `TBD` | Pending |
 | FR-002 | An administration `admin` can invite people by email to join their administration as `member` or `admin`. | `TBD` | Pending |
 | FR-003 | Property managers (`admin` and `member`) can create tasks for buildings assigned to their administration, assign them, and view existing tasks. | `TBD` | Pending |
-| FR-004 | Direct clients can create tasks for their home and choose the contractor or tradesman. | `TBD` | Pending |
+| FR-004 | Direct clients can create tasks for their home by booking a slot with a tradesman (FR-038). Booking a contractor is not supported for now. | `TBD` | Pending |
 | FR-005 | A task can be assigned to a contractor or directly to a tradesman. | `TBD` | Pending |
 | FR-006 | A contractor can assign a task they received to one of their tradesmen. | `TBD` | Pending |
-| FR-007 | Search for professionals (contractors and tradesmen), ordered/grouped by trade. | `TBD` | Future |
+| FR-007 | Direct clients can search independent tradesmen by trade. Searching contractors: future. | `TBD` | Pending |
 | FR-008 | A building's administration can be changed, keeping the history of past assignments. | `TBD` | Pending |
 | FR-009 | After a change of administration, the new administration can view tasks managed by previous administrations of the building. The previous administration loses access to them. | `TBD` | Pending |
 | FR-010 | After a change of administration, the new administration can continue managing the building's open tasks. | `TBD` | Pending |
@@ -124,13 +129,13 @@ Sign-up rules:
 | FR-018 | Any property manager of the administration (or the direct client, for their own tasks) can cancel a task before it is completed, giving a mandatory reason. | `TBD` | Pending |
 | FR-019 | A task can be rejected at any point before it is completed or cancelled. | `TBD` | Pending |
 | FR-020 | The full history of each task (who did what, and when) is kept and can be viewed. | `TBD` | Pending |
-| FR-021 | A tradesman can list their tasks and mark them as completed. | `TBD` | Pending |
+| FR-021 | A tradesman can list their tasks (their agenda), ordered by date, and mark them as completed. | `TBD` | Pending |
 | FR-022 | The administration sets the date of a task (`scheduledAt`) when creating it. | `TBD` | Pending |
 | FR-023 | A contractor can mark a task they hold as completed. | `TBD` | Pending |
-| FR-024 | Direct clients can create tasks without a date, to be agreed with the professional. | `TBD` | Pending |
-| FR-025 | Availability calendar so clients and professionals can agree on a date. | `TBD` | Future |
+| FR-024 | Direct client tasks are always created with a date: the booked slot. Replaces the former rule (tasks without a date, agreed with the professional later). | `TBD` | Pending |
+| FR-025 | Tradesman availability settings (working hours, days off). For now every slot without a task is free. | `TBD` | Future |
 | FR-026 | Reschedule a task (change its date), recording a `rescheduled` event. Allowed for the administration or the contractor (administration tasks), and for the direct client or the assigned professional (direct client tasks). | `TBD` | Future |
-| FR-027 | When a direct client's task is rejected, its agreed date is cleared. | `TBD` | Pending |
+| FR-027 | When a direct client's task is rejected, its booked date is cleared, so the client books a new slot with another tradesman. | `TBD` | Pending |
 | FR-028 | People sign up and sign in with their Google account (SSO, through Auth0). Google is the only sign-in method for now. | `TBD` | Pending |
 | FR-030 | A person who signs up as a contractor creates their own Company. | `TBD` | Pending |
 | FR-031 | A contractor can invite tradesmen by email to work at their service. | `TBD` | Pending |
@@ -139,7 +144,12 @@ Sign-up rules:
 | FR-034 | Invitations expire after a validity period (placeholder: 5 minutes). | `TBD` | Pending |
 | FR-035 | The invited person is notified by email when invited. | `TBD` | Pending |
 | FR-036 | In-app notifications (e.g. a notifications dashboard), starting with invitations. | `TBD` | Future |
-| FR-029 | On first sign-in, the person chooses their profile type (property manager, contractor, or tradesman). Platform owner cannot be chosen; direct client cannot be chosen for now. | `TBD` | Pending |
+| FR-037 | A person who signs up as a direct client registers their first home (its address). | `TBD` | Pending |
+| FR-038 | A direct client can book a free slot of an independent tradesman, for a trade the tradesman has and one of the client's homes. Booking creates a task assigned to that tradesman. | `TBD` | Pending |
+| FR-039 | Tasks are scheduled in 30-minute slots, from 07:00 to 18:30 (the last one ends at 19:00). | `TBD` | Pending |
+| FR-040 | A tradesman cannot have two tasks in the same slot. Booking a taken slot fails. | `TBD` | Pending |
+| FR-041 | A tradesman can update their trades after onboarding. | `TBD` | Pending |
+| FR-029 | On first sign-in, the person chooses their profile type (property manager, direct client, contractor, or tradesman). Platform owner cannot be chosen. | `TBD` | Pending |
 
 ### 3.2 Non-functional requirements
 
@@ -271,7 +281,7 @@ Each role has a profile with role-specific fields:
 | PropertyManager | `administrationId`   | UUID | **Required.** FK → PropertyAdministration.                            |
 | PropertyManager | `administrationRole` | enum | `admin` \| `member`. Replaces the former `propertyRole` (`admin` \| `owner`). |
 
-A direct client can have several homes. The link is stored on the home itself (`Property.directClientId`), not on the profile.
+A direct client can have several homes. The link is stored on the home itself (`Property.directClientId`), not on the profile. The first home is registered at onboarding.
 
 #### Trade
 
@@ -349,7 +359,7 @@ Rules:
 | `status`      | enum      | `unassigned` \| `assigned` \| `completed` \| `cancelled`. See [lifecycle](#53-states-and-lifecycles). |
 | `createdAt`   | timestamp |                                                        |
 | `updatedAt`   | timestamp |                                                        |
-| `scheduledAt` | timestamp | When the work is planned to happen. Administration tasks: set when creating the task. Direct client tasks: optional, set once agreed with the professional. |
+| `scheduledAt` | timestamp | Start of the slot in which the work is planned. Administration tasks: set when creating the task. Direct client tasks: the booked slot. |
 | `completedAt` | timestamp | Optional. Set when the work is finished.               |
 | `cancelledAt` | timestamp | Optional. Set when the task is cancelled.              |
 | `createdBy`   | UUID      | FK → User (property manager or direct client) who created the task. |
@@ -363,10 +373,31 @@ Rules:
 Scheduling rules:
 
 - The administration defines the date (`scheduledAt`) when creating the task, before handing it to the contractor.
-- A direct client agrees the date with the professional, since it depends on both parties' availability. Their tasks can exist without a date until it is agreed.
-- _Future:_ an availability calendar to agree dates, and a way to reschedule a task (change `scheduledAt`). Each reschedule is recorded as a `rescheduled` event. Who can reschedule:
+- A direct client sets the date by booking a free slot of the tradesman when creating the task.
+- _Future:_ tradesman availability settings (FR-025), and a way to reschedule a task (change `scheduledAt`). Each reschedule is recorded as a `rescheduled` event. Who can reschedule:
   - Administration tasks: any property manager of the administration, or the contractor who holds the task.
   - Direct client tasks: the direct client, or the assigned professional (contractor or tradesman).
+
+Slot rules:
+
+- A slot lasts 30 minutes and starts on the hour or half hour. The first slot of the day starts at 07:00 and the last one at 18:30, so there are 24 slots per day.
+- Every `scheduledAt` must be the start of a slot, also for administration tasks, and must be in the future.
+- Slots are in the platform's time zone, `America/Argentina/Buenos_Aires`, for now. As every date in the API, `scheduledAt` is sent and stored in UTC.
+- Every day of the week has slots. Holidays are not taken into account for now.
+- A task takes exactly one slot. Longer jobs are not modeled for now.
+
+Booking rules (direct clients):
+
+- The direct client picks an **independent** tradesman (no contractor), a trade the tradesman has, one of their own homes, and a free slot.
+- Booking creates the task already `assigned` to the tradesman, with no confirmation step. The tradesman can reject it like any task assigned to them directly, which frees the slot.
+
+Agenda and collision rules:
+
+- A tradesman's agenda is their tasks that are not `cancelled`, ordered by `scheduledAt`.
+- A slot is taken for a tradesman when they have a task in it that is not `cancelled`. This applies to every task with a `tradesmanId`, also when a contractor assigns one of their tradesmen to an administration task.
+- Assigning a tradesman to a slot they already have taken fails with `409`.
+- Enforced by a partial unique index on (`tradesmanId`, `scheduledAt`) for tasks that are not `cancelled` (see ADR-004), so two concurrent bookings of the same slot cannot both succeed.
+- Cancelling or rejecting a task frees its slot: rejecting clears `tradesmanId`.
 
 Assignment rules:
 
@@ -377,7 +408,7 @@ Assignment rules:
 - A contractor can reject a task assigned to them, or reassign it to another of their tradesmen.
 - A tradesman can reject a task **only** if it was assigned to them directly. Tasks received through their contractor cannot be rejected by the tradesman.
 - A task can be rejected at any point before it is `completed` or `cancelled`.
-- A rejected task becomes **unassigned**: `contractorId` and `tradesmanId` are cleared and `status` goes back to `unassigned`, so another professional can be picked. For administration tasks `scheduledAt` is kept, since the administration defined it. For direct client tasks `scheduledAt` is cleared, since it was agreed with the professional who rejected it.
+- A rejected task becomes **unassigned**: `contractorId` and `tradesmanId` are cleared and `status` goes back to `unassigned`, so another professional can be picked. For administration tasks `scheduledAt` is kept, since the administration defined it. For direct client tasks `scheduledAt` is cleared, since it was a slot of the tradesman who rejected it.
 
 Cancellation rules:
 
@@ -518,8 +549,9 @@ Every endpoint requires a valid access token unless its required role is "None".
 | Method | Path                                    | Description                                                                  | Required role  |
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
 | GET    | `/health`                               | API and database health.                                                     | None           |
-| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A property manager also creates their administration (`administrationName`, as `admin`), a contractor their Company (`companyName`), and a tradesman may give their `trades`. `directClient` cannot be chosen for now. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
+| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A property manager also creates their administration (`administrationName`, as `admin`), a contractor their Company (`companyName`), a direct client their first home (`home`: `street`, `number`, `postalCode`, `intersection`), and a tradesman may give their `trades`. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
 | GET    | `/me`                                   | The caller's User. `404` before onboarding.                                  | Authenticated (onboarded or not) |
+| PUT    | `/me/trades`                            | Replace the caller's trades.                                                 | Tradesman      |
 | GET    | `/me/invitations`                       | Pending, non-expired invitations for the caller's email.                     | Authenticated (onboarded or not) |
 | POST   | `/invitations/:id/accept`               | An existing User accepts an invitation for their email.                      | Invited User   |
 | POST   | `/invitations/:id/decline`              | Decline an invitation for the caller's email.                                | Invited person |
@@ -534,6 +566,10 @@ Every endpoint requires a valid access token unless its required role is "None".
 | GET    | `/properties/:id`                       | Get a property with its current administration.                              | Platform owner, or a property manager if the building is currently assigned to their administration |
 | PUT    | `/properties/:id/administration`        | Change the property's administration (closes the current assignment, opens a new one). | Platform owner, until it is defined (see [Open questions](#12-open-questions)) |
 | GET    | `/properties/:id/administration-history`| Administration assignment history, newest first.                             | Same as `GET /properties/:id` |
+| GET    | `/tradesmen?trade=`                     | Independent tradesmen who have the trade.                                    | Direct client  |
+| GET    | `/tradesmen/:id/availability?date=`     | The tradesman's free slots on a date (`YYYY-MM-DD`, platform time zone).     | Direct client  |
+| POST   | `/tasks`                                | Book a slot: create a task (`tradesmanId`, `propertyId`, `trade`, `title`, `description`, `scheduledAt`) assigned to the tradesman. `409` if the slot is taken. Task creation by property managers will be added here too. | Direct client  |
+| GET    | `/tasks?from=&to=`                      | The caller's tasks, ordered by `scheduledAt`. A tradesman gets their agenda (tasks assigned to them); a direct client, the tasks they created. | Tradesman, direct client |
 
 ### 6.3 Error format
 
@@ -545,11 +581,11 @@ Standard NestJS error responses:
 
 | Status | When                                                                                         |
 | ------ | -------------------------------------------------------------------------------------------- |
-| 400    | Invalid request: wrong types, unknown fields, blank required values, invalid UUIDs.          |
+| 400    | Invalid request: wrong types, unknown fields, blank required values, invalid UUIDs, or a `scheduledAt` that is not the start of a future slot. |
 | 401    | Missing, invalid, or expired access token.                                                   |
 | 403    | Valid token, but the caller has not completed onboarding, their role is not allowed, or the resource belongs to another administration. |
 | 404    | A referenced property or administration does not exist.                                      |
-| 409    | Business conflict (e.g. assigning the administration a property already has), or a concurrent change on the same property (retryable). |
+| 409    | Business conflict (e.g. assigning the administration a property already has, or booking a slot the tradesman already has taken), or a concurrent change on the same property (retryable). |
 
 ---
 
@@ -684,6 +720,8 @@ Domain model:
 - [ ] Is `Unit.managerId` a property manager, a direct client, or a unit owner/tenant? _To be defined with the product team._
 - [ ] Payment data for `Company` and `PropertyAdministration`.
 - [ ] Invitation validity period (5 minutes is a placeholder).
+- [ ] Can direct clients book tradesmen who work for a contractor? (Currently only independent tradesmen.)
+- [ ] Can direct clients book contractors? (Currently only tradesmen.)
 
 Deferred (not part of the current business-focused design phase):
 
@@ -694,4 +732,6 @@ Deferred (not part of the current business-focused design phase):
 - [ ] Leaving an administration or a contractor (and what happens to an administration left without `admin`s, or to a tradesman's open tasks).
 - [ ] Email provider for transactional email.
 - [ ] Multiple profile types per person (e.g. a tradesman who is also a direct client). Single profile for now; may be added later.
-- [ ] Until the availability calendar exists, how does a direct client's task get its date? (e.g. agreed outside the app and entered by the client or the professional, or left empty.)
+- [ ] Jobs longer than one slot.
+- [ ] Restrict which days have slots (e.g. weekends, holidays). Every day has slots for now, but this is expected to be restricted.
+- [ ] More than one time zone.
