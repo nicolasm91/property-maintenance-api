@@ -1,4 +1,4 @@
-export interface Administration {
+export class Administration {
   id: string;
   name: string;
   createdAt: Date;

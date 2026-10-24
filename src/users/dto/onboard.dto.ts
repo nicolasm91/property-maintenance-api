@@ -9,6 +9,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { AddressDto } from '../../properties/dto/create-property.dto.js';
 import { PROFILE_TYPES, type ProfileType, TRADES, type Trade } from '../entities/user.entity.js';
 
@@ -33,23 +34,27 @@ export class OnboardDto {
   @IsNotEmpty()
   lastName: string;
 
+  @ApiPropertyOptional({ description: 'Required for propertyManager: the administration they create.' })
   @ValidateIf((dto: OnboardDto) => dto.profileType === 'propertyManager')
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
   administrationName?: string;
 
+  @ApiPropertyOptional({ description: 'Required for contractor: the Company they create.' })
   @ValidateIf((dto: OnboardDto) => dto.profileType === 'contractor')
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
   companyName?: string;
 
+  @ApiPropertyOptional({ type: AddressDto, description: 'Required for directClient: their first home.' })
   @ValidateIf((dto: OnboardDto) => dto.profileType === 'directClient')
   @ValidateNested()
   @Type(() => AddressDto)
   home?: AddressDto;
 
+  @ApiPropertyOptional({ enum: TRADES, isArray: true, description: 'Tradesmen only. Zero or more trades.' })
   @IsOptional()
   @IsArray()
   @ArrayUnique()

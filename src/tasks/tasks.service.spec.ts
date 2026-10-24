@@ -4,10 +4,10 @@ import { PropertiesService } from '../properties/properties.service.js';
 import { TradesmenService } from '../tradesmen/tradesmen.service.js';
 import { Task } from './entities/task.entity.js';
 import { TasksRepository } from './repositories/tasks.repository.js';
-import { DirectClient, TasksService, TradesmanUser } from './tasks.service.js';
+import { DirectClientCaller, TasksService, TradesmanCaller } from './tasks.service.js';
 
-const client: DirectClient = { role: 'directClient', userId: 'c1' };
-const tradesmanUser: TradesmanUser = { role: 'tradesman', userId: 't1' };
+const client: DirectClientCaller = { role: 'directClient', userId: 'c1' };
+const tradesmanUser: TradesmanCaller = { role: 'tradesman', userId: 't1' };
 
 const person = (id: string) => ({ id, name: 'Ana', middleName: null, lastName: 'García' });
 

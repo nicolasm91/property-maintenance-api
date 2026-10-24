@@ -1,6 +1,6 @@
 import { Trade } from '../../users/entities/user.entity.js';
 
-export interface Tradesman {
+export class Tradesman {
   id: string;
   name: string;
   middleName: string | null;

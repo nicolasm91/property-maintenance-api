@@ -37,6 +37,12 @@
       "rules": {
         "no-restricted-imports": "off"
       }
+    },
+    {
+      "files": ["src/**/*.spec.ts"],
+      "rules": {
+        "typescript/no-misused-spread": "off"
+      }
     }
   ]
 }
