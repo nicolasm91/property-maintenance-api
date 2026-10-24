@@ -381,6 +381,8 @@ Rules:
 
 `Task` holds the **current** state. Its full history lives in [TaskEvent](#taskevent).
 
+Not implemented yet (post-MVP): `contractorId` and `unitId`, since the MVP only has direct client tasks.
+
 Scheduling rules:
 
 - The administration defines the date (`scheduledAt`) when creating the task, before handing it to the contractor.
@@ -474,7 +476,9 @@ Append-only history of a task. Every relevant action creates one row, in the sam
 Rules:
 
 - Rows are never updated or deleted.
-- The task's assignment periods (who held it, from when to when) can be derived from its `assigned`, `reassigned`, and `rejected` events.
+- The task's assignment periods (who held it, from when to when) can be derived from its `created`, `assigned`, `reassigned`, and `rejected` events.
+- A task created already assigned (a direct client booking) records a single `created` event with its `tradesmanId`, not a separate `assigned` event.
+- Not implemented yet (post-MVP): `contractorId` and `companyId`.
 
 ### 5.2 Relationships
 
@@ -565,7 +569,7 @@ Every endpoint requires a valid access token unless its required role is "None".
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
 | GET    | `/health`                               | API and database health.                                                     | None           |
 | POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A property manager also creates their administration (`administrationName`, as `admin`), a contractor their Company (`companyName`), a direct client their first home (`home`: `street`, `number`, `postalCode`, `intersection`), and a tradesman may give their `trades`. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
-| GET    | `/me`                                   | The caller's User. `404` before onboarding.                                  | Authenticated (onboarded or not) |
+| GET    | `/me`                                   | The caller's User. A direct client's includes their `homes` (`id`, `address`), the properties they can book for. `404` before onboarding. | Authenticated (onboarded or not) |
 | PUT    | `/me/trades`                            | Replace the caller's trades.                                                 | Tradesman      |
 | GET    | `/me/invitations`                       | Pending, non-expired invitations for the caller's email.                     | Authenticated (onboarded or not) |
 | POST   | `/invitations/:id/accept`               | An existing User accepts an invitation for their email.                      | Invited User   |
@@ -584,7 +588,7 @@ Every endpoint requires a valid access token unless its required role is "None".
 | GET    | `/tradesmen?trade=`                     | Independent tradesmen who have the trade.                                    | Direct client  |
 | GET    | `/tradesmen/:id/availability?date=`     | The tradesman's free slots on a date (`YYYY-MM-DD`, platform time zone).     | Direct client  |
 | POST   | `/tasks`                                | Book a slot: create a task (`tradesmanId`, `propertyId`, `trade`, `title`, `description`, `scheduledAt`) assigned to the tradesman. `409` if the slot is taken. Task creation by property managers will be added here too. | Direct client  |
-| GET    | `/tasks?from=&to=`                      | The caller's tasks, ordered by `scheduledAt`. A tradesman gets their agenda (tasks assigned to them); a direct client, the tasks they created. | Tradesman, direct client |
+| GET    | `/tasks?from=&to=`                      | The caller's tasks, ordered by `scheduledAt`, optionally with `scheduledAt` in [`from`, `to`). A tradesman gets their agenda (tasks assigned to them, except `cancelled` and `rejected`); a direct client, every task they created. | Tradesman, direct client |
 | POST   | `/tasks/:id/complete`                   | Mark the task as `completed`. The task must be `assigned`.                   | The tradesman assigned to the task |
 | POST   | `/tasks/:id/reject`                     | Reject the task, with an optional `reason`. A direct client task ends as `rejected`. The task must be `assigned`. | The tradesman, if assigned to the task directly |
 | POST   | `/tasks/:id/cancel`                     | Cancel the task, with a mandatory `reason`. The task must be `unassigned` or `assigned`. | The direct client who created the task |
@@ -604,7 +608,7 @@ Standard NestJS error responses:
 | 401    | Missing, invalid, or expired access token.                                                   |
 | 403    | Valid token, but the caller has not completed onboarding, their role is not allowed, or the resource belongs to another administration. |
 | 404    | A referenced property or administration does not exist.                                      |
-| 409    | Business conflict (e.g. assigning the administration a property already has, or booking a slot the tradesman already has taken), or a concurrent change on the same property (retryable). |
+| 409    | Business conflict (e.g. assigning the administration a property already has, or booking a slot the tradesman already has taken), a task action on a task whose status does not allow it (e.g. cancelling a `completed` task), or a concurrent change on the same property or task (retryable). |
 
 ---
 
