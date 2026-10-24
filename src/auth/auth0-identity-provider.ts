@@ -18,11 +18,20 @@ export class Auth0IdentityProvider extends IdentityProvider {
     super();
   }
 
-  async setProfileMetadata(sub: string, metadata: ProfileMetadata): Promise<void> {
+  setProfileMetadata(sub: string, metadata: ProfileMetadata): Promise<void> {
+    return this.patchAppMetadata(sub, metadata);
+  }
+
+  // Auth0 merges app_metadata: a null value removes that key.
+  clearProfileMetadata(sub: string): Promise<void> {
+    return this.patchAppMetadata(sub, { userId: null, role: null, administrationId: null, administrationRole: null });
+  }
+
+  private async patchAppMetadata(sub: string, appMetadata: object) {
     const response = await fetch(`https://${this.domain}/api/v2/users/${encodeURIComponent(sub)}`, {
       method: 'PATCH',
       headers: { authorization: `Bearer ${await this.managementToken()}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ app_metadata: metadata }),
+      body: JSON.stringify({ app_metadata: appMetadata }),
     });
     if (!response.ok) {
       this.logger.error(`Updating app_metadata of ${sub} failed: ${response.status} ${await response.text()}`);

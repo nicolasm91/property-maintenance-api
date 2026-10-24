@@ -17,7 +17,7 @@ describe('AppController (e2e)', () => {
       .overrideProvider(TokenVerifier)
       .useValue(tokenVerifier)
       .overrideProvider(IdentityProvider)
-      .useValue({ setProfileMetadata: vi.fn() })
+      .useValue({ setProfileMetadata: vi.fn(), clearProfileMetadata: vi.fn() })
       .compile();
 
     app = moduleFixture.createNestApplication();

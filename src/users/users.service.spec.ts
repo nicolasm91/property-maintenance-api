@@ -139,6 +139,19 @@ describe('UsersService', () => {
       );
     });
 
+    it('throws 403 for a platform owner (password) account', async () => {
+      repository.findByAuth0Sub.mockResolvedValue(null);
+
+      await expect(
+        service.onboard(
+          { sub: 'auth0|owner', email: 'owner@example.com' },
+          { profileType: 'tradesman', name: 'Ana', lastName: 'García' },
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.create).not.toHaveBeenCalled();
+      expect(identityProvider.setProfileMetadata).not.toHaveBeenCalled();
+    });
+
     it('throws 403 without a verified email', async () => {
       repository.findByAuth0Sub.mockResolvedValue(null);
 

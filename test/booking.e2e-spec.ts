@@ -54,7 +54,7 @@ describe('Direct client booking (e2e)', () => {
       .overrideProvider(TokenVerifier)
       .useValue({ verify: (token: string) => Promise.resolve(sessions.get(token)) })
       .overrideProvider(IdentityProvider)
-      .useValue({ setProfileMetadata: () => Promise.resolve() })
+      .useValue({ setProfileMetadata: () => Promise.resolve(), clearProfileMetadata: () => Promise.resolve() })
       .compile();
     app = moduleFixture.createNestApplication();
     // Same pipe as main.ts, which tests don't run.

@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Identity } from '../auth/auth-user.js';
+import { Identity, isPasswordAccount } from '../auth/auth-user.js';
 import { IdentityProvider, ProfileMetadata } from '../auth/identity-provider.js';
 import { OnboardDto } from './dto/onboard.dto.js';
 import { UpdateTradesDto } from './dto/update-trades.dto.js';
@@ -26,6 +26,10 @@ export class UsersService {
     // Auth0: retrying syncs the claims again instead of failing.
     let user = await this.users.findByAuth0Sub(identity.sub);
     if (!user) {
+      // Onboarding would overwrite a platform owner's claims with a profile.
+      if (isPasswordAccount(identity.sub)) {
+        throw new ForbiddenException('Platform owner accounts cannot onboard');
+      }
       if (!identity.email) {
         throw new ForbiddenException('A verified email is required');
       }
