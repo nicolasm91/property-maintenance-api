@@ -83,7 +83,9 @@ Business rules:
 - When a task is assigned to a contractor, the contractor must assign it to one of their tradesmen.
 - A contractor can reject a task, or reassign it to another of their tradesmen.
 - A tradesman can reject a task only if it was assigned to them directly.
-- A task can be rejected at any point before it is completed or cancelled. A rejected task becomes unassigned, so another professional can be picked. Its date is kept for administration tasks, and cleared for direct client tasks. The rejection can include a reason (optional, for now).
+- A task can be rejected at any point before it is completed or cancelled. The rejection can include a reason (optional, for now).
+- A rejected administration task becomes unassigned, keeping its date, so another professional can be picked.
+- A rejected direct client task ends as `rejected`. To try again, the client books a new slot, which creates a new task. Direct client tasks are never reused.
 - The administration sets the task's date when creating it, before handing it to the contractor. A direct client sets it by booking a slot of the tradesman.
 - Tasks will be reschedulable in the future. Administration tasks can be rescheduled by the administration or the contractor; direct client tasks by the direct client or the assigned professional.
 - A task can be marked as completed by its tradesman or by the contractor who holds it.
@@ -133,8 +135,8 @@ Sign-up rules:
 | FR-013 | A tradesman can reject a task that was assigned to them directly. | MVP | Pending |
 | FR-014 | A direct client can register more than one home. | Post-MVP | Pending |
 | FR-015 | When rejecting a task, the contractor or tradesman can optionally give a reason. | MVP | Pending |
-| FR-016 | A rejected task returns to `unassigned` so its creator can assign it to another professional. | MVP | Pending |
-| FR-017 | Every task exposes its current status (`unassigned`, `assigned`, `completed`, `cancelled`). | MVP | Pending |
+| FR-016 | A rejected administration task returns to `unassigned` so its creator can assign it to another professional. | MVP | Pending |
+| FR-017 | Every task exposes its current status (`unassigned`, `assigned`, `completed`, `cancelled`, `rejected`). | MVP | Pending |
 | FR-018 | Any property manager of the administration (or the direct client, for their own tasks) can cancel a task before it is completed, giving a mandatory reason. | MVP | Pending |
 | FR-019 | A task can be rejected at any point before it is completed or cancelled. | MVP | Pending |
 | FR-020 | The full history of each task (who did what, and when) is kept and can be viewed. | MVP | Pending |
@@ -144,7 +146,7 @@ Sign-up rules:
 | FR-024 | Direct client tasks are always created with a date: the booked slot. Replaces the former rule (tasks without a date, agreed with the professional later). | MVP | Pending |
 | FR-025 | Tradesman availability settings (working hours, days off). For now every slot without a task is free. | Future | Future |
 | FR-026 | Reschedule a task (change its date), recording a `rescheduled` event. Allowed for the administration or the contractor (administration tasks), and for the direct client or the assigned professional (direct client tasks). | Future | Future |
-| FR-027 | When a direct client's task is rejected, its booked date is cleared, so the client books a new slot with another tradesman. | MVP | Pending |
+| FR-027 | When a direct client's task is rejected, it ends as `rejected`. To try again, the client books a new slot, which creates a new task: tasks are never reused. Replaces the former rule (the task returned to `unassigned` with its date cleared). | MVP | Pending |
 | FR-028 | People sign up and sign in with their Google account (SSO, through Auth0). Google is the only sign-in method for now. | MVP | Pending |
 | FR-030 | A person who signs up as a contractor creates their own Company. | Post-MVP | Pending |
 | FR-031 | A contractor can invite tradesmen by email to work at their service. | Post-MVP | Pending |
@@ -365,7 +367,7 @@ Rules:
 | `title`       | string    | Short summary of the job.                              |
 | `description` | text      | Details of the problem / work to be done.              |
 | `trade`       | enum      | Trade required for the job. See [Trade](#trade).       |
-| `status`      | enum      | `unassigned` \| `assigned` \| `completed` \| `cancelled`. See [lifecycle](#53-states-and-lifecycles). |
+| `status`      | enum      | `unassigned` \| `assigned` \| `completed` \| `cancelled` \| `rejected`. See [lifecycle](#53-states-and-lifecycles). |
 | `createdAt`   | timestamp |                                                        |
 | `updatedAt`   | timestamp |                                                        |
 | `scheduledAt` | timestamp | Start of the slot in which the work is planned. Administration tasks: set when creating the task. Direct client tasks: the booked slot. |
@@ -398,15 +400,15 @@ Slot rules:
 Booking rules (direct clients):
 
 - The direct client picks an **independent** tradesman (no contractor), a trade the tradesman has, one of their own homes, and a free slot.
-- Booking creates the task already `assigned` to the tradesman, with no confirmation step. The tradesman can reject it like any task assigned to them directly, which frees the slot.
+- Booking creates the task already `assigned` to the tradesman, with no confirmation step. The tradesman can reject it like any task assigned to them directly, which ends it as `rejected` and frees the slot.
 
 Agenda and collision rules:
 
-- A tradesman's agenda is their tasks that are not `cancelled`, ordered by `scheduledAt`.
-- A slot is taken for a tradesman when they have a task in it that is not `cancelled`. This applies to every task with a `tradesmanId`, also when a contractor assigns one of their tradesmen to an administration task.
+- A tradesman's agenda is their tasks that are not `cancelled` or `rejected`, ordered by `scheduledAt`.
+- A slot is taken for a tradesman when they have a task in it that is not `cancelled` or `rejected`. This applies to every task with a `tradesmanId`, also when a contractor assigns one of their tradesmen to an administration task.
 - Assigning a tradesman to a slot they already have taken fails with `409`.
-- Enforced by a partial unique index on (`tradesmanId`, `scheduledAt`) for tasks that are not `cancelled` (see ADR-004), so two concurrent bookings of the same slot cannot both succeed.
-- Cancelling or rejecting a task frees its slot: rejecting clears `tradesmanId`.
+- Enforced by a partial unique index on (`tradesmanId`, `scheduledAt`) for tasks that are not `cancelled` or `rejected` (see ADR-004), so two concurrent bookings of the same slot cannot both succeed.
+- Cancelling or rejecting a task frees its slot. Rejecting an administration task clears `tradesmanId`; a `rejected` direct client task keeps it, as a record of who rejected it.
 
 Assignment rules:
 
@@ -417,13 +419,14 @@ Assignment rules:
 - A contractor can reject a task assigned to them, or reassign it to another of their tradesmen.
 - A tradesman can reject a task **only** if it was assigned to them directly. Tasks received through their contractor cannot be rejected by the tradesman.
 - A task can be rejected at any point before it is `completed` or `cancelled`.
-- A rejected task becomes **unassigned**: `contractorId` and `tradesmanId` are cleared and `status` goes back to `unassigned`, so another professional can be picked. For administration tasks `scheduledAt` is kept, since the administration defined it. For direct client tasks `scheduledAt` is cleared, since it was a slot of the tradesman who rejected it.
+- A rejected administration task becomes **unassigned**: `contractorId` and `tradesmanId` are cleared and `status` goes back to `unassigned`, so another professional can be picked. `scheduledAt` is kept, since the administration defined it.
+- A rejected direct client task becomes **`rejected`**, a final status. `tradesmanId` and `scheduledAt` are kept as a record. The client books a new slot to try again, which creates a new task.
 
 Cancellation rules:
 
 - A task on a building managed by an administration can be cancelled by **any** property manager of that administration, not only its creator.
 - A direct client's task can be cancelled by that direct client.
-- A task can be cancelled at any point before it is `completed`.
+- A task can be cancelled while it is `unassigned` or `assigned`.
 - A cancellation **requires** a reason, and is recorded in the task's history.
 
 #### Invitation
@@ -517,20 +520,23 @@ stateDiagram-v2
     [*] --> assigned : created with contractor or tradesman
     unassigned --> assigned : assigned to contractor or tradesman
     assigned --> assigned : contractor assigns / reassigns tradesman
-    assigned --> unassigned : rejected
+    assigned --> unassigned : rejected (administration task)
+    assigned --> rejected : rejected (direct client task)
     assigned --> completed : completed by tradesman or contractor
     unassigned --> cancelled : cancelled (reason required)
     assigned --> cancelled : cancelled (reason required)
     completed --> [*]
     cancelled --> [*]
+    rejected --> [*]
 ```
 
 | Status       | Meaning                                                                                 |
 | ------------ | --------------------------------------------------------------------------------------- |
-| `unassigned` | No contractor or tradesman. Initial state, or after a rejection.                        |
+| `unassigned` | No contractor or tradesman. Initial state, or after an administration task is rejected. |
 | `assigned`   | Assigned to a contractor (with or without a tradesman yet) or directly to a tradesman. |
 | `completed`  | The work is finished (`completedAt`). Final.                                             |
 | `cancelled`  | Cancelled before completion (`cancelledAt`). Final.                                      |
+| `rejected`   | A direct client task rejected by its tradesman. Final: the client books a new task instead. |
 
 There is no `scheduled` status: the date is set when the task is created, so it is a field (`scheduledAt`), not a state.
 
@@ -579,6 +585,10 @@ Every endpoint requires a valid access token unless its required role is "None".
 | GET    | `/tradesmen/:id/availability?date=`     | The tradesman's free slots on a date (`YYYY-MM-DD`, platform time zone).     | Direct client  |
 | POST   | `/tasks`                                | Book a slot: create a task (`tradesmanId`, `propertyId`, `trade`, `title`, `description`, `scheduledAt`) assigned to the tradesman. `409` if the slot is taken. Task creation by property managers will be added here too. | Direct client  |
 | GET    | `/tasks?from=&to=`                      | The caller's tasks, ordered by `scheduledAt`. A tradesman gets their agenda (tasks assigned to them); a direct client, the tasks they created. | Tradesman, direct client |
+| POST   | `/tasks/:id/complete`                   | Mark the task as `completed`. The task must be `assigned`.                   | The tradesman assigned to the task |
+| POST   | `/tasks/:id/reject`                     | Reject the task, with an optional `reason`. A direct client task ends as `rejected`. The task must be `assigned`. | The tradesman, if assigned to the task directly |
+| POST   | `/tasks/:id/cancel`                     | Cancel the task, with a mandatory `reason`. The task must be `unassigned` or `assigned`. | The direct client who created the task |
+| GET    | `/tasks/:id/events`                     | The task's history, oldest first, with actor and reason.                     | The direct client who created the task, or the tradesman assigned to it |
 
 ### 6.3 Error format
 
