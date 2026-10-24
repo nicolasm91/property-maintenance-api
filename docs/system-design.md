@@ -1,7 +1,7 @@
 # System Design Specification — Property Maintenance API
 
 > **Status:** Draft
-> **Last updated:** 2026-10-22
+> **Last updated:** 2026-10-24
 > **Owner:** otsnd
 
 This document collects the system's design decisions. Each section will be completed as requirements are defined. Entries marked `TBD` are pending definition.
@@ -16,9 +16,18 @@ A platform that connects **property administrations** (firms that manage condomi
 
 ### 1.2 Scope
 
-| In scope | Out of scope |
-| -------- | ------------ |
-| `TBD`    | `TBD`        |
+The MVP covers a single end-to-end flow: **a direct client books an independent tradesman**. Each requirement's priority (`MVP`, `Post-MVP`, `Future`) is in [Functional requirements](#31-functional-requirements).
+
+| In scope (MVP) | Out of scope (post-MVP) |
+| -------------- | ----------------------- |
+| Sign-up with Google and onboarding: choosing the profile type, a direct client registering their first home, a tradesman setting and updating their trades. | Registering more than one home per direct client. |
+| A direct client searching independent tradesmen by trade and viewing their free slots. | Tasks created by property managers, and anything else administration-related beyond what is already built (onboarding, properties, change of administration). |
+| Booking a slot, which creates a task assigned to the tradesman, with slot and collision rules. | Contractors receiving, assigning, reassigning, rejecting, or completing tasks. |
+| The tradesman's agenda: listing their tasks, marking them as completed, and rejecting them (with an optional reason). | Invitations and transactional email. |
+| A direct client listing and cancelling their tasks (with a mandatory reason). | Availability settings, rescheduling, and in-app notifications (`Future`). |
+| Task history (`TaskEvent`). | |
+
+Property manager and contractor onboarding, administrations, and properties are already implemented. They are kept, but not extended during the MVP.
 
 ### 1.3 Glossary
 
@@ -109,47 +118,47 @@ Sign-up rules:
 
 | ID     | Description | Priority | Status  |
 | ------ | ----------- | -------- | ------- |
-| FR-001 | A person who signs up as a property manager creates their own administration and becomes its first `admin`. Replaces the former rule (administrations created by the platform owner). | `TBD` | Pending |
-| FR-002 | An administration `admin` can invite people by email to join their administration as `member` or `admin`. | `TBD` | Pending |
-| FR-003 | Property managers (`admin` and `member`) can create tasks for buildings assigned to their administration, assign them, and view existing tasks. | `TBD` | Pending |
-| FR-004 | Direct clients can create tasks for their home by booking a slot with a tradesman (FR-038). Booking a contractor is not supported for now. | `TBD` | Pending |
-| FR-005 | A task can be assigned to a contractor or directly to a tradesman. | `TBD` | Pending |
-| FR-006 | A contractor can assign a task they received to one of their tradesmen. | `TBD` | Pending |
-| FR-007 | Direct clients can search independent tradesmen by trade. Searching contractors: future. | `TBD` | Pending |
-| FR-008 | A building's administration can be changed, keeping the history of past assignments. | `TBD` | Pending |
-| FR-009 | After a change of administration, the new administration can view tasks managed by previous administrations of the building. The previous administration loses access to them. | `TBD` | Pending |
-| FR-010 | After a change of administration, the new administration can continue managing the building's open tasks. | `TBD` | Pending |
-| FR-011 | A contractor can reject a task assigned to them. | `TBD` | Pending |
-| FR-012 | A contractor can reassign a task to another of their tradesmen. | `TBD` | Pending |
-| FR-013 | A tradesman can reject a task that was assigned to them directly. | `TBD` | Pending |
-| FR-014 | A direct client can register more than one home. | `TBD` | Pending |
-| FR-015 | When rejecting a task, the contractor or tradesman can optionally give a reason. | `TBD` | Pending |
-| FR-016 | A rejected task returns to `unassigned` so its creator can assign it to another professional. | `TBD` | Pending |
-| FR-017 | Every task exposes its current status (`unassigned`, `assigned`, `completed`, `cancelled`). | `TBD` | Pending |
-| FR-018 | Any property manager of the administration (or the direct client, for their own tasks) can cancel a task before it is completed, giving a mandatory reason. | `TBD` | Pending |
-| FR-019 | A task can be rejected at any point before it is completed or cancelled. | `TBD` | Pending |
-| FR-020 | The full history of each task (who did what, and when) is kept and can be viewed. | `TBD` | Pending |
-| FR-021 | A tradesman can list their tasks (their agenda), ordered by date, and mark them as completed. | `TBD` | Pending |
-| FR-022 | The administration sets the date of a task (`scheduledAt`) when creating it. | `TBD` | Pending |
-| FR-023 | A contractor can mark a task they hold as completed. | `TBD` | Pending |
-| FR-024 | Direct client tasks are always created with a date: the booked slot. Replaces the former rule (tasks without a date, agreed with the professional later). | `TBD` | Pending |
-| FR-025 | Tradesman availability settings (working hours, days off). For now every slot without a task is free. | `TBD` | Future |
-| FR-026 | Reschedule a task (change its date), recording a `rescheduled` event. Allowed for the administration or the contractor (administration tasks), and for the direct client or the assigned professional (direct client tasks). | `TBD` | Future |
-| FR-027 | When a direct client's task is rejected, its booked date is cleared, so the client books a new slot with another tradesman. | `TBD` | Pending |
-| FR-028 | People sign up and sign in with their Google account (SSO, through Auth0). Google is the only sign-in method for now. | `TBD` | Pending |
-| FR-030 | A person who signs up as a contractor creates their own Company. | `TBD` | Pending |
-| FR-031 | A contractor can invite tradesmen by email to work at their service. | `TBD` | Pending |
-| FR-032 | A person with a pending invitation for their email can accept it when signing up. The invitation determines their profile type and what they join. | `TBD` | Pending |
-| FR-033 | Existing Users can be invited, and can accept or decline the invitation, if it matches their profile type and they are not already in an administration or working for a contractor. | `TBD` | Pending |
-| FR-034 | Invitations expire after a validity period (placeholder: 5 minutes). | `TBD` | Pending |
-| FR-035 | The invited person is notified by email when invited. | `TBD` | Pending |
-| FR-036 | In-app notifications (e.g. a notifications dashboard), starting with invitations. | `TBD` | Future |
-| FR-037 | A person who signs up as a direct client registers their first home (its address). | `TBD` | Pending |
-| FR-038 | A direct client can book a free slot of an independent tradesman, for a trade the tradesman has and one of the client's homes. Booking creates a task assigned to that tradesman. | `TBD` | Pending |
-| FR-039 | Tasks are scheduled in 30-minute slots, from 07:00 to 18:30 (the last one ends at 19:00). | `TBD` | Pending |
-| FR-040 | A tradesman cannot have two tasks in the same slot. Booking a taken slot fails. | `TBD` | Pending |
-| FR-041 | A tradesman can update their trades after onboarding. | `TBD` | Pending |
-| FR-029 | On first sign-in, the person chooses their profile type (property manager, direct client, contractor, or tradesman). Platform owner cannot be chosen. | `TBD` | Pending |
+| FR-001 | A person who signs up as a property manager creates their own administration and becomes its first `admin`. Replaces the former rule (administrations created by the platform owner). | Post-MVP | Pending |
+| FR-002 | An administration `admin` can invite people by email to join their administration as `member` or `admin`. | Post-MVP | Pending |
+| FR-003 | Property managers (`admin` and `member`) can create tasks for buildings assigned to their administration, assign them, and view existing tasks. | Post-MVP | Pending |
+| FR-004 | Direct clients can create tasks for their home by booking a slot with a tradesman (FR-038). Booking a contractor is not supported for now. | MVP | Pending |
+| FR-005 | A task can be assigned to a contractor or directly to a tradesman. | Post-MVP | Pending |
+| FR-006 | A contractor can assign a task they received to one of their tradesmen. | Post-MVP | Pending |
+| FR-007 | Direct clients can search independent tradesmen by trade. Searching contractors: future. | MVP | Pending |
+| FR-008 | A building's administration can be changed, keeping the history of past assignments. | Post-MVP | Pending |
+| FR-009 | After a change of administration, the new administration can view tasks managed by previous administrations of the building. The previous administration loses access to them. | Post-MVP | Pending |
+| FR-010 | After a change of administration, the new administration can continue managing the building's open tasks. | Post-MVP | Pending |
+| FR-011 | A contractor can reject a task assigned to them. | Post-MVP | Pending |
+| FR-012 | A contractor can reassign a task to another of their tradesmen. | Post-MVP | Pending |
+| FR-013 | A tradesman can reject a task that was assigned to them directly. | MVP | Pending |
+| FR-014 | A direct client can register more than one home. | Post-MVP | Pending |
+| FR-015 | When rejecting a task, the contractor or tradesman can optionally give a reason. | MVP | Pending |
+| FR-016 | A rejected task returns to `unassigned` so its creator can assign it to another professional. | MVP | Pending |
+| FR-017 | Every task exposes its current status (`unassigned`, `assigned`, `completed`, `cancelled`). | MVP | Pending |
+| FR-018 | Any property manager of the administration (or the direct client, for their own tasks) can cancel a task before it is completed, giving a mandatory reason. | MVP | Pending |
+| FR-019 | A task can be rejected at any point before it is completed or cancelled. | MVP | Pending |
+| FR-020 | The full history of each task (who did what, and when) is kept and can be viewed. | MVP | Pending |
+| FR-021 | A tradesman can list their tasks (their agenda), ordered by date, and mark them as completed. | MVP | Pending |
+| FR-022 | The administration sets the date of a task (`scheduledAt`) when creating it. | Post-MVP | Pending |
+| FR-023 | A contractor can mark a task they hold as completed. | Post-MVP | Pending |
+| FR-024 | Direct client tasks are always created with a date: the booked slot. Replaces the former rule (tasks without a date, agreed with the professional later). | MVP | Pending |
+| FR-025 | Tradesman availability settings (working hours, days off). For now every slot without a task is free. | Future | Future |
+| FR-026 | Reschedule a task (change its date), recording a `rescheduled` event. Allowed for the administration or the contractor (administration tasks), and for the direct client or the assigned professional (direct client tasks). | Future | Future |
+| FR-027 | When a direct client's task is rejected, its booked date is cleared, so the client books a new slot with another tradesman. | MVP | Pending |
+| FR-028 | People sign up and sign in with their Google account (SSO, through Auth0). Google is the only sign-in method for now. | MVP | Pending |
+| FR-030 | A person who signs up as a contractor creates their own Company. | Post-MVP | Pending |
+| FR-031 | A contractor can invite tradesmen by email to work at their service. | Post-MVP | Pending |
+| FR-032 | A person with a pending invitation for their email can accept it when signing up. The invitation determines their profile type and what they join. | Post-MVP | Pending |
+| FR-033 | Existing Users can be invited, and can accept or decline the invitation, if it matches their profile type and they are not already in an administration or working for a contractor. | Post-MVP | Pending |
+| FR-034 | Invitations expire after a validity period (placeholder: 5 minutes). | Post-MVP | Pending |
+| FR-035 | The invited person is notified by email when invited. | Post-MVP | Pending |
+| FR-036 | In-app notifications (e.g. a notifications dashboard), starting with invitations. | Future | Future |
+| FR-037 | A person who signs up as a direct client registers their first home (its address). | MVP | Pending |
+| FR-038 | A direct client can book a free slot of an independent tradesman, for a trade the tradesman has and one of the client's homes. Booking creates a task assigned to that tradesman. | MVP | Pending |
+| FR-039 | Tasks are scheduled in 30-minute slots, from 07:00 to 18:30 (the last one ends at 19:00). | MVP | Pending |
+| FR-040 | A tradesman cannot have two tasks in the same slot. Booking a taken slot fails. | MVP | Pending |
+| FR-041 | A tradesman can update their trades after onboarding. | MVP | Pending |
+| FR-029 | On first sign-in, the person chooses their profile type (property manager, direct client, contractor, or tradesman). Platform owner cannot be chosen. | MVP | Pending |
 
 ### 3.2 Non-functional requirements
 
