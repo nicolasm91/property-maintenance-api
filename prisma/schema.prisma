@@ -36,13 +36,17 @@ model Property {
   addressIntersection String       @map("address_intersection")
   // Denormalized copy of the open assignment, for cheap reads.
   administrationId    String?      @map("administration_id") @db.Uuid
+  directClientId      String?      @map("direct_client_id") @db.Uuid
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz
 
   administration PropertyAdministration?    @relation(fields: [administrationId], references: [id])
+  directClient   User?                      @relation(fields: [directClientId], references: [id])
   assignments    AdministrationAssignment[]
+  tasks          Task[]
 
   @@index([administrationId])
+  @@index([directClientId])
   @@map("properties")
 }
 
@@ -102,6 +106,9 @@ model User {
   propertyManager PropertyManager?
   contractor      Contractor?
   tradesman       Tradesman?
+  homes           Property[]
+  createdTasks    Task[]
+  taskEvents      TaskEvent[]
 
   @@map("users")
 }
@@ -148,7 +155,76 @@ model Tradesman {
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   contractor Contractor? @relation(fields: [contractorId], references: [userId])
+  tasks      Task[]
+  taskEvents TaskEvent[]
 
   @@index([contractorId])
   @@map("tradesmen")
+}
+
+enum TaskStatus {
+  unassigned
+  assigned
+  completed
+  cancelled
+  rejected
+
+  @@map("task_status")
+}
+
+enum TaskEventType {
+  created
+  assigned
+  reassigned
+  rejected
+  rescheduled
+  completed
+  cancelled
+
+  @@map("task_event_type")
+}
+
+// A tradesman can't have two active tasks in the same slot, enforced by a
+// partial unique index in a hand-written migration: Prisma can't express it.
+model Task {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String
+  description String
+  trade       Trade
+  status      TaskStatus
+  scheduledAt DateTime   @map("scheduled_at") @db.Timestamptz
+  completedAt DateTime?  @map("completed_at") @db.Timestamptz
+  cancelledAt DateTime?  @map("cancelled_at") @db.Timestamptz
+  createdById String     @map("created_by_id") @db.Uuid
+  tradesmanId String?    @map("tradesman_id") @db.Uuid
+  propertyId  String     @map("property_id") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  createdBy User        @relation(fields: [createdById], references: [id])
+  tradesman Tradesman?  @relation(fields: [tradesmanId], references: [userId])
+  property  Property    @relation(fields: [propertyId], references: [id])
+  events    TaskEvent[]
+
+  @@index([createdById, scheduledAt])
+  @@index([tradesmanId, scheduledAt])
+  @@index([propertyId])
+  @@map("tasks")
+}
+
+model TaskEvent {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId      String        @map("task_id") @db.Uuid
+  type        TaskEventType
+  actorId     String        @map("actor_id") @db.Uuid
+  tradesmanId String?       @map("tradesman_id") @db.Uuid
+  reason      String?
+  occurredAt  DateTime      @default(now()) @map("occurred_at") @db.Timestamptz
+
+  task      Task       @relation(fields: [taskId], references: [id])
+  actor     User       @relation(fields: [actorId], references: [id])
+  tradesman Tradesman? @relation(fields: [tradesmanId], references: [userId])
+
+  @@index([taskId, occurredAt])
+  @@map("task_events")
 }

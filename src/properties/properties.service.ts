@@ -39,6 +39,9 @@ export class PropertiesService {
     if (user.role === 'propertyManager' && property.administration?.id !== user.administrationId) {
       throw new ForbiddenException();
     }
+    if (user.role === 'directClient' && property.directClientId !== user.userId) {
+      throw new ForbiddenException();
+    }
     return property;
   }
 

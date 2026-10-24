@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { Identity } from '../auth/auth-user.js';
 import { IdentityProvider, ProfileMetadata } from '../auth/identity-provider.js';
 import { OnboardDto } from './dto/onboard.dto.js';
+import { UpdateTradesDto } from './dto/update-trades.dto.js';
 import { User } from './entities/user.entity.js';
 import { NewProfile, UsersRepository } from './repositories/users.repository.js';
 
@@ -40,12 +41,22 @@ export class UsersService {
     await this.identityProvider.setProfileMetadata(identity.sub, toProfileMetadata(user));
     return user;
   }
+
+  async updateTrades(userId: string, dto: UpdateTradesDto): Promise<User> {
+    const user = await this.users.updateTrades(userId, dto.trades);
+    if (!user) {
+      throw new NotFoundException(`Tradesman ${userId} not found`);
+    }
+    return user;
+  }
 }
 
 function toNewProfile(dto: OnboardDto): NewProfile {
   switch (dto.profileType) {
     case 'propertyManager':
       return { role: dto.profileType, administrationName: dto.administrationName! };
+    case 'directClient':
+      return { role: dto.profileType, home: dto.home! };
     case 'contractor':
       return { role: dto.profileType, companyName: dto.companyName! };
     case 'tradesman':

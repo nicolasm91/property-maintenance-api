@@ -1,5 +1,15 @@
-import { Transform } from 'class-transformer';
-import { ArrayUnique, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, ValidateIf } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  ArrayUnique,
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateIf,
+  ValidateNested,
+} from 'class-validator';
+import { AddressDto } from '../../properties/dto/create-property.dto.js';
 import { PROFILE_TYPES, type ProfileType, TRADES, type Trade } from '../entities/user.entity.js';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
@@ -34,6 +44,11 @@ export class OnboardDto {
   @IsString()
   @IsNotEmpty()
   companyName?: string;
+
+  @ValidateIf((dto: OnboardDto) => dto.profileType === 'directClient')
+  @ValidateNested()
+  @Type(() => AddressDto)
+  home?: AddressDto;
 
   @IsOptional()
   @IsArray()
