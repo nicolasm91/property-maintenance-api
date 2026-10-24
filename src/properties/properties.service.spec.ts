@@ -18,6 +18,7 @@ const property: Property = {
   propertyType: 'building',
   address,
   administration: { id: 'a1', name: 'First Administration' },
+  directClientId: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -134,6 +135,21 @@ describe('PropertiesService', () => {
       repository.findById.mockResolvedValue(property);
 
       await expect(service.findOne('p1', manager)).resolves.toBe(property);
+    });
+
+    it("returns one of the direct client's homes", async () => {
+      const home = { ...property, administration: null, directClientId: 'c1' };
+      repository.findById.mockResolvedValue(home);
+
+      await expect(service.findOne('p1', { role: 'directClient', userId: 'c1' })).resolves.toBe(home);
+    });
+
+    it("throws 403 for another direct client's home", async () => {
+      repository.findById.mockResolvedValue({ ...property, administration: null, directClientId: 'c2' });
+
+      await expect(service.findOne('p1', { role: 'directClient', userId: 'c1' })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
 
     it('throws 403 for a property of another administration', async () => {

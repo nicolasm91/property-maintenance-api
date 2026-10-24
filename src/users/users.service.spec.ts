@@ -27,7 +27,7 @@ const manager: User = {
 
 describe('UsersService', () => {
   let service: UsersService;
-  const repository = { findByAuth0Sub: vi.fn(), create: vi.fn() };
+  const repository = { findByAuth0Sub: vi.fn(), create: vi.fn(), updateTrades: vi.fn() };
   const identityProvider = { setProfileMetadata: vi.fn() };
 
   beforeEach(async () => {
@@ -104,6 +104,22 @@ describe('UsersService', () => {
       );
     });
 
+    it('creates a direct client with their first home', async () => {
+      const home = { street: 'Av. Corrientes', number: '1234', postalCode: 'C1043', intersection: 'Talcahuano' };
+      repository.findByAuth0Sub.mockResolvedValue(null);
+      repository.create.mockResolvedValue({ ...base, role: 'directClient', homes: [{ id: 'p1', address: home }] });
+
+      await service.onboard(identity, { profileType: 'directClient', name: 'Ana', lastName: 'García', home });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ profile: { role: 'directClient', home } }),
+      );
+      expect(identityProvider.setProfileMetadata).toHaveBeenCalledWith(identity.sub, {
+        userId: 'u1',
+        role: 'directClient',
+      });
+    });
+
     it('re-syncs the claims of an existing User instead of creating another', async () => {
       repository.findByAuth0Sub.mockResolvedValue(manager);
 
@@ -133,6 +149,22 @@ describe('UsersService', () => {
         ),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateTrades', () => {
+    it("replaces the tradesman's trades", async () => {
+      const tradesman = { ...base, role: 'tradesman', trades: ['mason'], contractorId: null };
+      repository.updateTrades.mockResolvedValue(tradesman);
+
+      await expect(service.updateTrades('u1', { trades: ['mason'] })).resolves.toBe(tradesman);
+      expect(repository.updateTrades).toHaveBeenCalledWith('u1', ['mason']);
+    });
+
+    it('throws 404 when the User is not a tradesman', async () => {
+      repository.updateTrades.mockResolvedValue(null);
+
+      await expect(service.updateTrades('u1', { trades: [] })).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

@@ -24,6 +24,7 @@ const toProperty = (row: PropertyRow): Property => ({
     intersection: row.addressIntersection,
   },
   administration: row.administration,
+  directClientId: row.directClientId,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

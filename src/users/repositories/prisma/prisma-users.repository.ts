@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '../../../prisma/generated/client.js';
 import { PrismaService } from '../../../prisma/prisma.service.js';
-import { User } from '../../entities/user.entity.js';
+import { Trade, User } from '../../entities/user.entity.js';
 import { CreateUserData, NewProfile, UsersRepository } from '../users.repository.js';
 
 const summary = { select: { id: true, name: true } } as const;
@@ -10,11 +10,12 @@ const userInclude = {
   propertyManager: { include: { administration: summary } },
   contractor: { include: { company: summary } },
   tradesman: true,
+  homes: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.UserInclude;
 
 type UserRow = Prisma.UserGetPayload<{ include: typeof userInclude }>;
 
-const toUser = ({ propertyManager, contractor, tradesman, auth0Sub: _auth0Sub, ...row }: UserRow): User => {
+const toUser = ({ propertyManager, contractor, tradesman, homes, auth0Sub: _auth0Sub, ...row }: UserRow): User => {
   switch (row.role) {
     case 'propertyManager':
       return {
@@ -28,7 +29,19 @@ const toUser = ({ propertyManager, contractor, tradesman, auth0Sub: _auth0Sub, .
     case 'tradesman':
       return { ...row, role: row.role, trades: tradesman!.trades, contractorId: tradesman!.contractorId };
     case 'directClient':
-      return { ...row, role: row.role };
+      return {
+        ...row,
+        role: row.role,
+        homes: homes.map((home) => ({
+          id: home.id,
+          address: {
+            street: home.addressStreet,
+            number: home.addressNumber,
+            postalCode: home.addressPostalCode,
+            intersection: home.addressIntersection,
+          },
+        })),
+      };
   }
 };
 
@@ -41,6 +54,19 @@ const profileData = (profile: NewProfile): Omit<Prisma.UserCreateInput, 'auth0Su
           create: {
             administrationRole: 'admin',
             administration: { create: { name: profile.administrationName } },
+          },
+        },
+      };
+    case 'directClient':
+      return {
+        role: profile.role,
+        homes: {
+          create: {
+            propertyType: 'house',
+            addressStreet: profile.home.street,
+            addressNumber: profile.home.number,
+            addressPostalCode: profile.home.postalCode,
+            addressIntersection: profile.home.intersection,
           },
         },
       };
@@ -77,5 +103,14 @@ export class PrismaUsersRepository implements UsersRepository {
       }
       throw error;
     }
+  }
+
+  async updateTrades(userId: string, trades: Trade[]): Promise<User | null> {
+    const { count } = await this.prisma.tradesman.updateMany({ where: { userId }, data: { trades } });
+    if (count === 0) {
+      return null;
+    }
+    const row = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, include: userInclude });
+    return toUser(row);
   }
 }

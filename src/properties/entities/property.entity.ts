@@ -19,6 +19,7 @@ export interface Property {
   propertyType: PropertyType;
   address: Address;
   administration: AdministrationSummary | null;
+  directClientId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
