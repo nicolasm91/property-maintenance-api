@@ -1,7 +1,7 @@
 # System Design Specification — Property Maintenance API
 
 > **Status:** Draft
-> **Last updated:** 2026-10-24
+> **Last updated:** 2026-10-25
 > **Owner:** otsnd
 
 This document collects the system's design decisions. Each section will be completed as requirements are defined. Entries marked `TBD` are pending definition.
@@ -46,7 +46,7 @@ Property manager and contractor onboarding, administrations, and properties are 
 | Task                    | A repair or maintenance job created by a property manager or a direct client, and assigned to a contractor or directly to a tradesman.                                    |
 | Profile type            | The kind of user a person is in the app (`propertyManager`, `directClient`, `contractor`, `tradesman`). Chosen by the person when they sign up. |
 | Onboarding              | The step after a person's first sign-in in which they choose their profile type and become a User of the app. |
-| Slot                    | A 30-minute period, starting on the hour or half hour between 07:00 and 18:30, in which a task can be scheduled. A direct client books a tradesman by picking one of their free slots. |
+| Slot                    | A start time for a job, on the hour or half hour between 07:00 and 18:30. It is not the job's duration: the 30-minute grid only spaces bookings out across a tradesman's day. A direct client books a tradesman by picking one of their free slots. |
 | Agenda                  | A tradesman's scheduled tasks, ordered by date.                                                                             |
 
 ---
@@ -157,7 +157,7 @@ Sign-up rules:
 | FR-036 | In-app notifications (e.g. a notifications dashboard), starting with invitations. | Future | Future |
 | FR-037 | A person who signs up as a direct client registers their first home (its address). | MVP | Pending |
 | FR-038 | A direct client can book a free slot of an independent tradesman, for a trade the tradesman has and one of the client's homes. Booking creates a task assigned to that tradesman. | MVP | Pending |
-| FR-039 | Tasks are scheduled in 30-minute slots, from 07:00 to 18:30 (the last one ends at 19:00). | MVP | Pending |
+| FR-039 | Tasks start at a slot: every 30 minutes, from 07:00 to 18:30. A slot is when the job starts, not how long it takes. | MVP | Pending |
 | FR-040 | A tradesman cannot have two tasks in the same slot. Booking a taken slot fails. | MVP | Pending |
 | FR-041 | A tradesman can update their trades after onboarding. | MVP | Pending |
 | FR-029 | On first sign-in, the person chooses their profile type (property manager, direct client, contractor, or tradesman). Platform owner cannot be chosen. | MVP | Pending |
@@ -393,11 +393,12 @@ Scheduling rules:
 
 Slot rules:
 
-- A slot lasts 30 minutes and starts on the hour or half hour. The first slot of the day starts at 07:00 and the last one at 18:30, so there are 24 slots per day.
+- A slot is a start time on the hour or half hour. The first slot of the day starts at 07:00 and the last one at 18:30, so there are 24 slots per day.
+- A slot is not the job's duration: a job usually takes longer than 30 minutes. The grid only spaces bookings out so they don't pile up on a tradesman's day; it does not prevent a job from running into the next slots.
 - Every `scheduledAt` must be the start of a slot, also for administration tasks, and must be in the future.
 - Slots are in the platform's time zone, `America/Argentina/Buenos_Aires`, for now. As every date in the API, `scheduledAt` is sent and stored in UTC.
 - Every day of the week has slots. Holidays are not taken into account for now.
-- A task takes exactly one slot. Longer jobs are not modeled for now.
+- A task holds only its start slot. How long the job takes is not modeled for now, so the next slot stays bookable.
 
 Booking rules (direct clients):
 
@@ -788,6 +789,6 @@ Deferred (not part of the current business-focused design phase):
 - [ ] Leaving an administration or a contractor (and what happens to an administration left without `admin`s, or to a tradesman's open tasks).
 - [ ] Email provider for transactional email.
 - [ ] Multiple profile types per person (e.g. a tradesman who is also a direct client). Single profile for now; may be added later.
-- [ ] Jobs longer than one slot.
+- [ ] Job durations: blocking the slots a job is expected to take, instead of only its start slot.
 - [ ] Restrict which days have slots (e.g. weekends, holidays). Every day has slots for now, but this is expected to be restricted.
 - [ ] More than one time zone.
