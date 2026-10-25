@@ -14,6 +14,9 @@ async function bootstrap() {
     }),
   );
   setUpOpenApi(app);
+  // In a container Node is PID 1 and ignores SIGTERM unless the app handles it, so
+  // redeploys would kill it mid-request instead of closing it cleanly.
+  app.enableShutdownHooks();
   await app.listen(process.env.PORT ?? 3000);
 }
 await bootstrap();
