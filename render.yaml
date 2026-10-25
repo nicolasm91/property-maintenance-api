@@ -1,0 +1,43 @@
+# Render Blueprint for the API.
+#
+# Root directory: the repo root. package.json, prisma/ and the Dockerfile all
+# live here, so no rootDir is set (it defaults to the repo root).
+#
+# Create it in the Render Dashboard with New > Blueprint and pick this repo.
+# Secrets are declared with sync: false, so Render prompts for their values
+# instead of reading them from this file. Existing values are preserved.
+services:
+  - type: web
+    name: property-maintenance-api
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm build
+    # --prod=false: NODE_ENV=production makes pnpm skip devDependencies, but the
+    # build needs @nestjs/cli and the start command needs the prisma CLI.
+    #
+    # Migrations run before the app boots. preDeployCommand is only available on
+    # paid instance types, so it stays in the start command for now.
+    startCommand: pnpm db:migrate:deploy && pnpm start:prod
+    # Public endpoint backed by `SELECT 1`, so it also catches a lost DB.
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      # Supabase "Session pooler" URI (IPv4), not the direct connection string.
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_AUDIENCE
+        value: https://property-maintenance-api
+      - key: AUTH0_MGMT_CLIENT_ID
+        sync: false
+      - key: AUTH0_MGMT_CLIENT_SECRET
+        sync: false
+      # Origin allowed by CORS: the deployed web app URL.
+      - key: WEB_ORIGIN
+        sync: false
+      # Pin the Node major/minor used in development; Render defaults to 24.x.
+      - key: NODE_VERSION
+        value: 22.23.1
