@@ -18,6 +18,10 @@ export type AuthUser =
     }
   | { role: 'directClient' | 'contractor' | 'tradesman'; userId: string };
 
+// Auth0 database connection (username and password) accounts. Only platform
+// owners have them; everybody else signs in with Google.
+export const isPasswordAccount = (sub: string): boolean => sub.startsWith('auth0|');
+
 // Who the caller is in Auth0, available even before onboarding.
 export interface Identity {
   sub: string;

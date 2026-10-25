@@ -45,6 +45,12 @@ After changing dependencies, recreate the containers' `node_modules`:
 docker compose up --build --renew-anon-volumes
 ```
 
+## API documentation
+
+With the API running, Swagger UI is at [http://localhost:3000/docs](http://localhost:3000/docs) and the OpenAPI document at [/docs/openapi.json](http://localhost:3000/docs/openapi.json). To call protected endpoints, paste an Auth0 access token into **Authorize**.
+
+Platform owner (superadmin) accounts sign in with a username and password and need a one-time Auth0 setup: see [Platform owner accounts](docs/system-design.md#73-platform-owner-accounts).
+
 ## Compile and run the project
 
 ```bash

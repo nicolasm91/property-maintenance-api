@@ -2,19 +2,19 @@ export const PROPERTY_TYPES = ['house', 'building'] as const;
 
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
-export interface Address {
+export class Address {
   street: string;
   number: string;
   postalCode: string;
   intersection: string;
 }
 
-export interface AdministrationSummary {
+export class AdministrationSummary {
   id: string;
   name: string;
 }
 
-export interface Property {
+export class Property {
   id: string;
   propertyType: PropertyType;
   address: Address;
@@ -24,7 +24,7 @@ export interface Property {
   updatedAt: Date;
 }
 
-export interface AdministrationAssignment {
+export class AdministrationAssignment {
   id: string;
   administration: AdministrationSummary;
   startedAt: Date;

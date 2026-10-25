@@ -10,4 +10,5 @@ export interface ProfileMetadata {
 
 export abstract class IdentityProvider {
   abstract setProfileMetadata(sub: string, metadata: ProfileMetadata): Promise<void>;
+  abstract clearProfileMetadata(sub: string): Promise<void>;
 }

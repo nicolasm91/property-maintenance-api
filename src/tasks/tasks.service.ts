@@ -16,8 +16,8 @@ import { INACTIVE_STATUSES, Task, TaskEvent, TaskStatus } from './entities/task.
 import { TasksRepository } from './repositories/tasks.repository.js';
 import { isFutureSlotStart } from './slots.js';
 
-export type DirectClient = AuthUser & { role: 'directClient' };
-export type TradesmanUser = AuthUser & { role: 'tradesman' };
+export type DirectClientCaller = AuthUser & { role: 'directClient' };
+export type TradesmanCaller = AuthUser & { role: 'tradesman' };
 
 @Injectable()
 export class TasksService {
@@ -27,7 +27,7 @@ export class TasksService {
     private readonly propertiesService: PropertiesService,
   ) {}
 
-  async create(dto: CreateTaskDto, user: DirectClient): Promise<Task> {
+  async create(dto: CreateTaskDto, user: DirectClientCaller): Promise<Task> {
     const scheduledAt = new Date(dto.scheduledAt);
     if (!isFutureSlotStart(scheduledAt)) {
       throw new BadRequestException('scheduledAt must be the start of a future slot');
@@ -49,7 +49,7 @@ export class TasksService {
     });
   }
 
-  findAll(query: FindTasksQueryDto, user: DirectClient | TradesmanUser): Promise<Task[]> {
+  findAll(query: FindTasksQueryDto, user: DirectClientCaller | TradesmanCaller): Promise<Task[]> {
     const range = {
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
@@ -60,7 +60,7 @@ export class TasksService {
     return this.tasks.findAll({ ...range, createdById: user.userId });
   }
 
-  async complete(id: string, user: TradesmanUser): Promise<Task> {
+  async complete(id: string, user: TradesmanCaller): Promise<Task> {
     const task = await this.findOneOrThrow(id);
     if (task.tradesman?.id !== user.userId) {
       throw new ForbiddenException();
@@ -69,7 +69,7 @@ export class TasksService {
     return this.tasks.changeStatus(id, { from: ['assigned'], to: 'completed', actorId: user.userId, reason: null });
   }
 
-  async reject(id: string, dto: RejectTaskDto, user: TradesmanUser): Promise<Task> {
+  async reject(id: string, dto: RejectTaskDto, user: TradesmanCaller): Promise<Task> {
     const task = await this.findOneOrThrow(id);
     if (task.tradesman?.id !== user.userId) {
       throw new ForbiddenException();
@@ -83,7 +83,7 @@ export class TasksService {
     });
   }
 
-  async cancel(id: string, dto: CancelTaskDto, user: DirectClient): Promise<Task> {
+  async cancel(id: string, dto: CancelTaskDto, user: DirectClientCaller): Promise<Task> {
     const task = await this.findOneOrThrow(id);
     if (task.createdBy.id !== user.userId) {
       throw new ForbiddenException();
@@ -98,7 +98,7 @@ export class TasksService {
     });
   }
 
-  async findEvents(id: string, user: DirectClient | TradesmanUser): Promise<TaskEvent[]> {
+  async findEvents(id: string, user: DirectClientCaller | TradesmanCaller): Promise<TaskEvent[]> {
     const task = await this.findOneOrThrow(id);
     if (task.createdBy.id !== user.userId && task.tradesman?.id !== user.userId) {
       throw new ForbiddenException();

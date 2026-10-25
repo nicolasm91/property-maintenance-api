@@ -16,14 +16,17 @@ describe('JoseTokenVerifier', () => {
     verifier = new JoseTokenVerifier(createLocalJWKSet({ keys: [jwk] }), issuer, audience);
   });
 
-  const sign = (claims: Record<string, unknown>, options: { issuer?: string; audience?: string } = {}) => {
+  const sign = (
+    claims: Record<string, unknown>,
+    options: { issuer?: string; audience?: string; subject?: string } = {},
+  ) => {
     const payload: JWTPayload = {};
     for (const [name, value] of Object.entries(claims)) {
       payload[CLAIMS_NAMESPACE + name] = value;
     }
     return new SignJWT(payload)
       .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
-      .setSubject('google-oauth2|123')
+      .setSubject(options.subject ?? 'google-oauth2|123')
       .setIssuer(options.issuer ?? issuer)
       .setAudience(options.audience ?? audience)
       .setExpirationTime('5m')
@@ -44,10 +47,14 @@ describe('JoseTokenVerifier', () => {
     });
   });
 
-  it('maps the platform owner without userId', async () => {
-    await expect(verifier.verify(await sign({ role: 'platformOwner' }))).resolves.toMatchObject({
-      user: { role: 'platformOwner' },
-    });
+  it('maps the platform owner of a password account, without userId', async () => {
+    const token = await sign({ role: 'platformOwner' }, { subject: 'auth0|admin' });
+
+    await expect(verifier.verify(token)).resolves.toMatchObject({ user: { role: 'platformOwner' } });
+  });
+
+  it('rejects the platform owner role on an SSO account', async () => {
+    await expect(verifier.verify(await sign({ role: 'platformOwner' }))).rejects.toBeInstanceOf(InvalidTokenError);
   });
 
   it('maps other profiles with their userId', async () => {

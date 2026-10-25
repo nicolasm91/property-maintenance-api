@@ -20,14 +20,19 @@ export const TASK_EVENT_TYPES = [
 
 export type TaskEventType = (typeof TASK_EVENT_TYPES)[number];
 
-export interface PersonSummary {
+export class PersonSummary {
   id: string;
   name: string;
   middleName: string | null;
   lastName: string;
 }
 
-export interface Task {
+export class TaskProperty {
+  id: string;
+  address: Address;
+}
+
+export class Task {
   id: string;
   title: string;
   description: string;
@@ -36,14 +41,14 @@ export interface Task {
   scheduledAt: Date;
   completedAt: Date | null;
   cancelledAt: Date | null;
-  property: { id: string; address: Address };
+  property: TaskProperty;
   createdBy: PersonSummary;
   tradesman: PersonSummary | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface TaskEvent {
+export class TaskEvent {
   id: string;
   type: TaskEventType;
   actor: PersonSummary;

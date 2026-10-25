@@ -55,7 +55,7 @@ Property manager and contractor onboarding, administrations, and properties are 
 
 | Role                       | Description                                                                                 | Main permissions                                                                  |
 | -------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Platform owner             | Owner of the application. Super-roles to be defined later.                                 | `TBD`. Administrations and Companies are created by their own users at sign-up.  |
+| Platform owner             | Owner of the application (superadmin). Signs in with a username and password, never with SSO. See [7.3](#73-platform-owner-accounts). | List and force-delete Users of any profile type, e.g. to repeat sign-up tests with the same Google account. Administrations and Companies are created by their own users at sign-up. |
 | Property manager (admin)   | Administrator of a property administration. _Placeholder name._                            | Create and manage the administration's member users. Everything a member can do. |
 | Property manager (member)  | User created by an admin, with restricted permissions. _Placeholder name._                 | Create, assign, and cancel tasks, and view existing tasks (for now).                                   |
 | Direct client              | Private individual requesting repairs for their own home. Not part of any administration.  | Register their home, search tradesmen by trade, book a slot with one (which creates a task for their home), and cancel their tasks. |
@@ -559,7 +559,7 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 - **Pagination:** `TBD`
 - **Filtering and sorting:** `TBD`
 - **Dates:** ISO 8601 in UTC
-- **Documentation:** `TBD` (OpenAPI / Swagger)
+- **Documentation:** OpenAPI 3, generated from the code (`@nestjs/swagger` with its CLI plugin, so DTOs and entity classes describe themselves). Swagger UI at `/docs`, the JSON document at `/docs/openapi.json`. Entities are classes, not interfaces, so the document can describe responses; `User` is a union of one class per profile type (`oneOf`).
 
 ### 6.2 Endpoints
 
@@ -593,6 +593,8 @@ Every endpoint requires a valid access token unless its required role is "None".
 | POST   | `/tasks/:id/reject`                     | Reject the task, with an optional `reason`. A direct client task ends as `rejected`. The task must be `assigned`. | The tradesman, if assigned to the task directly |
 | POST   | `/tasks/:id/cancel`                     | Cancel the task, with a mandatory `reason`. The task must be `unassigned` or `assigned`. | The direct client who created the task |
 | GET    | `/tasks/:id/events`                     | The task's history, oldest first, with actor and reason.                     | The direct client who created the task, or the tradesman assigned to it |
+| GET    | `/admin/users?role=&search=`            | Every User, newest first, with their administration or Company and how many homes and tasks they have. Optional filters: profile type, and a text matched against email, name, and last name. | Platform owner |
+| DELETE | `/admin/users/:id`                      | Force-delete a User and everything that depends on it (see [7.3](#73-platform-owner-accounts)), then clear their Auth0 profile claims. `204`. | Platform owner |
 
 ### 6.3 Error format
 
@@ -614,7 +616,7 @@ Standard NestJS error responses:
 
 ## 7. Security
 
-- **Authentication:** Auth0 is the identity provider; people sign in with Google (SSO). The API never handles passwords or Google credentials: it only validates Auth0 access tokens (RS256, checked against the tenant's public keys, issuer, audience, and expiry).
+- **Authentication:** Auth0 is the identity provider; people sign in with Google (SSO), and platform owners with a username and password (see [7.3](#73-platform-owner-accounts)). The API never handles passwords or Google credentials: it only validates Auth0 access tokens (RS256, checked against the tenant's public keys, issuer, audience, and expiry).
 - **Authorization:** based **only** on the token's claims, with no database lookup per request. See [7.2](#72-token-claims).
 - **Input validation:** `TBD`
 - **Secrets management:** `TBD`
@@ -667,7 +669,7 @@ The Post-Login Action (source in `auth0/actions/add-profile-claims.js`) adds the
 | `administrationId`   | Property managers only.                                               |
 | `administrationRole` | Property managers only (`admin` \| `member`).                         |
 
-The `role` claim can also be `platformOwner`. It is set by hand in the account's `app_metadata` (with no `userId`, since the platform owner is not a User), until platform super-roles are designed.
+The `role` claim can also be `platformOwner`. It is set by hand in the `app_metadata` of a password account (with no `userId`, since the platform owner is not a User). See [7.3](#73-platform-owner-accounts).
 
 Rules:
 
@@ -675,6 +677,33 @@ Rules:
 - A change to this data only reaches the token on the next sign-in or refresh. This is accepted because profile types are not expected to change.
 - Changes made by the User themselves (onboarding, accepting an invitation) update `app_metadata` too, and the front end refreshes the token right away.
 - Checks that depend on a resource are made against the resource's own data, not the token. For example, "this building is currently assigned to the caller's administration" compares `Property.administrationId` with the `administrationId` claim, since buildings do change administration.
+
+### 7.3 Platform owner accounts
+
+Platform owners (superadmins) sign in with a username and password through an Auth0 **database connection**, never with Google. Auth0 still handles the password; the API only sees the access token.
+
+Rules:
+
+- The API accepts the `platformOwner` role only on password accounts, whose `sub` starts with `auth0|`. The same claim on an SSO account (`google-oauth2|…`) makes the token invalid (`401`), so a Google account can never act as platform owner, even with a wrong `app_metadata`.
+- Nobody can sign up on the database connection. Platform owner accounts are created by hand in Auth0, with `app_metadata` set to `{ "role": "platformOwner" }`.
+- Password accounts cannot onboard (`POST /me` returns `403`): onboarding would replace the platform owner's claims with a profile.
+- The front end opens the platform owner view at `/admin`, which signs in on the database connection.
+
+Auth0 setup (once per tenant):
+
+1. **Authentication → Database → Username-Password-Authentication**: turn on **Disable Sign Ups**, and enable the connection for the front end's Single Page Application.
+2. **User Management → Users → Create User** on that connection, with the platform owner's email and password.
+3. On that user, set **app_metadata** to `{ "role": "platformOwner" }`. The Post-Login Action copies it into the token.
+
+Force-deleting a User (`DELETE /admin/users/:id`) removes, in one transaction:
+
+- The User and their profile.
+- Every task they created, are assigned to, or that is on one of their homes, with its task events, plus any other event they performed.
+- Their homes.
+- Their administration, if they were its last property manager, with the buildings it currently administers (and those buildings' tasks and assignment history).
+- Their Company, if they were its last contractor. A contractor's tradesmen become independent.
+
+Then the API clears the profile keys of the Auth0 account's `app_metadata`, so their next sign-in starts onboarding again with a clean token. If clearing them fails, the delete still succeeds: stale claims only send the person back to onboarding, which writes them again. The Auth0 account itself is kept, so the same Google account can sign up again.
 
 ---
 
@@ -728,6 +757,7 @@ Rules:
 | ADR-003 | 2026-10-21 | Naming: `camelCase` in code and API, `snake_case` in the database (tables and columns, via Prisma `@map`). Primary keys are named `id` (UUID). | Accepted |
 | ADR-004 | 2026-10-21 | Invariants Prisma cannot express are enforced in hand-written migration SQL. First case: a partial unique index guaranteeing at most one open `AdministrationAssignment` per property. | Accepted |
 | ADR-005 | 2026-10-21 | Standard NestJS layering (Controller → Service → Repository) with repositories defined as interfaces. Only repository implementations (`repositories/prisma/`) may use Prisma, enforced by lint rules. Goal: the database is not tied to a concrete implementation. | Accepted |
+| ADR-007 | 2026-10-24 | Platform owners sign in with a username and password through an Auth0 database connection with sign-ups disabled, not with SSO, and the API only accepts the `platformOwner` claim on those accounts (`auth0|` subs). Passwords stay in Auth0; the API does not store credentials or issue its own tokens. | Accepted |
 | ADR-006 | 2026-10-22 | Use Auth0 as identity provider, with Google SSO. People sign up by themselves and choose their profile type at onboarding. The User's profile data lives in our database (source of truth), is copied to Auth0 `app_metadata`, and reaches the token as claims through a Post-Login Action. The API authorizes from the claims alone, without a database lookup per request; stale claims are accepted because profile types are not expected to change. | Accepted |
 
 ---
@@ -749,7 +779,7 @@ Domain model:
 Deferred (not part of the current business-focused design phase):
 
 - [ ] Who can change a building's administration (platform owner, the new administration, the old one)?
-- [ ] How platform owner accounts are granted (they can never be chosen at sign-up).
+- [x] How platform owner accounts are granted (they can never be chosen at sign-up). By hand in Auth0, on password accounts: see [7.3](#73-platform-owner-accounts) and ADR-007.
 - [ ] Contractors joining an existing Company (contractors are usually one-person companies).
 - [ ] In-app notifications (FR-036): wait until there is a front end.
 - [ ] Leaving an administration or a contractor (and what happens to an administration left without `admin`s, or to a tradesman's open tasks).

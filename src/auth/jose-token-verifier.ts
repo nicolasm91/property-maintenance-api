@@ -1,5 +1,5 @@
 import { errors, type JWTPayload, type JWTVerifyGetKey, jwtVerify } from 'jose';
-import { ADMINISTRATION_ROLES, AuthUser, ROLES } from './auth-user.js';
+import { ADMINISTRATION_ROLES, AuthUser, isPasswordAccount, ROLES } from './auth-user.js';
 import { InvalidTokenError, TokenVerifier, VerifiedToken } from './token-verifier.js';
 
 // Auth0 requires custom claims to be namespaced. Must match the Post-Login Action.
@@ -49,6 +49,10 @@ function toAuthUser(payload: JWTPayload): AuthUser | null {
     throw new InvalidTokenError(`Unknown role ${JSON.stringify(role)}`);
   }
   if (role === 'platformOwner') {
+    // Platform owners never sign in with SSO, so a Google account can't be one.
+    if (!payload.sub || !isPasswordAccount(payload.sub)) {
+      throw new InvalidTokenError('The platform owner must sign in with a password account');
+    }
     return { role };
   }
 

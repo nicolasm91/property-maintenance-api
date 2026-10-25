@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AdminModule } from './admin/admin.module.js';
 import { AdministrationsModule } from './administrations/administrations.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -22,6 +23,7 @@ import { UsersModule } from './users/users.module.js';
     UsersModule,
     TradesmenModule,
     TasksModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
