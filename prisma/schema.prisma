@@ -113,13 +113,16 @@ model User {
   @@map("users")
 }
 
+// administrationId and administrationRole are both set or both null (check
+// constraint in a hand-written migration): null until the property manager
+// creates their administration, after sign-up.
 model PropertyManager {
-  userId             String             @id @map("user_id") @db.Uuid
-  administrationId   String             @map("administration_id") @db.Uuid
-  administrationRole AdministrationRole @map("administration_role")
+  userId             String              @id @map("user_id") @db.Uuid
+  administrationId   String?             @map("administration_id") @db.Uuid
+  administrationRole AdministrationRole? @map("administration_role")
 
-  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  administration PropertyAdministration @relation(fields: [administrationId], references: [id])
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  administration PropertyAdministration? @relation(fields: [administrationId], references: [id], onDelete: Restrict)
 
   @@index([administrationId])
   @@map("property_managers")
@@ -136,12 +139,13 @@ model Company {
   @@map("companies")
 }
 
+// companyId is null until the contractor creates their Company, after sign-up.
 model Contractor {
-  userId    String @id @map("user_id") @db.Uuid
-  companyId String @map("company_id") @db.Uuid
+  userId    String  @id @map("user_id") @db.Uuid
+  companyId String? @map("company_id") @db.Uuid
 
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company   Company     @relation(fields: [companyId], references: [id])
+  company   Company?    @relation(fields: [companyId], references: [id], onDelete: Restrict)
   tradesmen Tradesman[]
 
   @@index([companyId])

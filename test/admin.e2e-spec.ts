@@ -96,18 +96,45 @@ describe('Platform owner (e2e)', () => {
   });
 
   it('deletes a property manager together with their now empty administration', async () => {
-    const identity = { sub: `google-oauth2|${randomUUID()}`, email: `${randomUUID()}@example.com` };
-    sessions.set('manager', { identity, user: null });
-    const { body: manager } = await request(app.getHttpServer())
-      .post('/me')
+    const manager = await signUp('manager', { profileType: 'propertyManager', name: 'Eva', lastName: 'Ruiz' });
+    sessions.get('manager')!.user = {
+      role: 'propertyManager',
+      userId: manager.id,
+      administrationId: null,
+      administrationRole: null,
+    };
+    const { body: withAdministration } = await request(app.getHttpServer())
+      .post('/me/administration')
       .set(as('manager'))
-      .send({ profileType: 'propertyManager', name: 'Eva', lastName: 'Ruiz', administrationName: 'Ruiz Adm.' })
+      .send({ name: 'Ruiz Adm.' })
       .expect(201);
-    userIds.push(manager.id);
+    expect(withAdministration).toMatchObject({ administration: { name: 'Ruiz Adm.' }, administrationRole: 'admin' });
+    await request(app.getHttpServer())
+      .post('/me/administration')
+      .set(as('manager'))
+      .send({ name: 'Other' })
+      .expect(409);
 
     await request(app.getHttpServer()).delete(`/admin/users/${manager.id}`).set(as('owner')).expect(204);
 
-    expect(await prisma.propertyAdministration.count({ where: { id: manager.administration.id } })).toBe(0);
+    expect(await prisma.propertyAdministration.count({ where: { id: withAdministration.administration.id } })).toBe(0);
+  });
+
+  it('lets a contractor create their Company after signing up, once', async () => {
+    const contractor = await signUp('contractor', { profileType: 'contractor', name: 'Martín', lastName: 'Sosa' });
+    expect(contractor).toMatchObject({ company: null });
+
+    const { body } = await request(app.getHttpServer())
+      .post('/me/company')
+      .set(as('contractor'))
+      .send({ name: 'Sosa SRL' })
+      .expect(201);
+    expect(body).toMatchObject({ company: { name: 'Sosa SRL' } });
+    await request(app.getHttpServer()).post('/me/company').set(as('contractor')).send({ name: 'Other' }).expect(409);
+    await request(app.getHttpServer()).post('/me/company').set(as('client')).send({ name: 'Nope' }).expect(403);
+
+    await request(app.getHttpServer()).delete(`/admin/users/${contractor.id}`).set(as('owner')).expect(204);
+    expect(await prisma.company.count({ where: { id: body.company.id } })).toBe(0);
   });
 
   it('is only for the platform owner', async () => {

@@ -104,6 +104,16 @@ describe('PropertiesService', () => {
       expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ administrationId: 'a1' }));
     });
 
+    it('throws 403 when the property manager has no administration yet', async () => {
+      await expect(
+        service.create(
+          { propertyType: 'building', address },
+          { ...manager, administrationId: null, administrationRole: null },
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
     it('throws 403 when a property manager uses another administration', async () => {
       await expect(
         service.create({ propertyType: 'building', address, administrationId: 'a2' }, manager),

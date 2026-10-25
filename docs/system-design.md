@@ -65,8 +65,8 @@ Property manager and contractor onboarding, administrations, and properties are 
 Business rules:
 
 - Property administrations are clients. A Company is **not** a property administration.
-- A property manager belongs to exactly one property administration, with an administration role of `admin` or `member`.
-- A person who signs up as a property manager creates their own administration, and becomes its first `admin`.
+- A property manager belongs to at most one property administration, with an administration role of `admin` or `member`. Until they create (or join) one, they can only create it.
+- A person who signs up as a property manager creates their own administration in a separate step after sign-up, and becomes its first `admin`.
 - An administration's `admin` invites people by email to join the administration as `member` (fewer permissions) or as another `admin`.
 - Both `admin` and `member` users can create tasks.
 - Each building is assigned to one property administration at a time, and knows which one it is.
@@ -93,8 +93,8 @@ Business rules:
 - The full history of a task (creation, assignments, reassignments, rejections, completion, cancellation) is kept, including who did each action.
 - The tradesman's experience must be minimal: they only see their tasks and mark them as completed.
 - Every task has a title, a description, the trade it requires, and a status.
-- A Company groups one or more contractors. A contractor **must** belong to a Company.
-- A person who signs up as a contractor creates their own Company. Contractors are usually one-person companies, so joining an existing Company is not supported for now.
+- A Company groups one or more contractors. A contractor belongs to a Company once they create it.
+- A person who signs up as a contractor creates their own Company in a separate step after sign-up. Contractors are usually one-person companies, so joining an existing Company is not supported for now.
 - A tradesman can work independently or at the service of **one** contractor at a time (for now).
 - A contractor invites tradesmen by email to work at their service.
 - A tradesman can have more than one trade.
@@ -120,7 +120,7 @@ Sign-up rules:
 
 | ID     | Description | Priority | Status  |
 | ------ | ----------- | -------- | ------- |
-| FR-001 | A person who signs up as a property manager creates their own administration and becomes its first `admin`. Replaces the former rule (administrations created by the platform owner). | Post-MVP | Pending |
+| FR-001 | A person who signs up as a property manager creates their own administration, in a separate step after sign-up, and becomes its first `admin`. Replaces the former rules (administrations created by the platform owner, then created in the sign-up form). | Post-MVP | Pending |
 | FR-002 | An administration `admin` can invite people by email to join their administration as `member` or `admin`. | Post-MVP | Pending |
 | FR-003 | Property managers (`admin` and `member`) can create tasks for buildings assigned to their administration, assign them, and view existing tasks. | Post-MVP | Pending |
 | FR-004 | Direct clients can create tasks for their home by booking a slot with a tradesman (FR-038). Booking a contractor is not supported for now. | MVP | Pending |
@@ -148,7 +148,7 @@ Sign-up rules:
 | FR-026 | Reschedule a task (change its date), recording a `rescheduled` event. Allowed for the administration or the contractor (administration tasks), and for the direct client or the assigned professional (direct client tasks). | Future | Future |
 | FR-027 | When a direct client's task is rejected, it ends as `rejected`. To try again, the client books a new slot, which creates a new task: tasks are never reused. Replaces the former rule (the task returned to `unassigned` with its date cleared). | MVP | Pending |
 | FR-028 | People sign up and sign in with their Google account (SSO, through Auth0). Google is the only sign-in method for now. | MVP | Pending |
-| FR-030 | A person who signs up as a contractor creates their own Company. | Post-MVP | Pending |
+| FR-030 | A person who signs up as a contractor creates their own Company, in a separate step after sign-up. | Post-MVP | Pending |
 | FR-031 | A contractor can invite tradesmen by email to work at their service. | Post-MVP | Pending |
 | FR-032 | A person with a pending invitation for their email can accept it when signing up. The invitation determines their profile type and what they join. | Post-MVP | Pending |
 | FR-033 | Existing Users can be invited, and can accept or decline the invitation, if it matches their profile type and they are not already in an administration or working for a contractor. | Post-MVP | Pending |
@@ -288,8 +288,8 @@ Each role has a profile with role-specific fields:
 | --------------- | -------------------- | ---- | --------------------------------------------------------------------- |
 | Tradesman       | `trades`             | enum[] | Zero or more trades. See [Trade](#trade).                           |
 | Tradesman       | `contractorId`       | UUID | Optional. FK → User (contractor). Empty for independent tradesmen. A tradesman works for **one contractor at a time** (for now). |
-| Contractor      | `companyId`          | UUID | **Required.** FK → Company.                                           |
-| PropertyManager | `administrationId`   | UUID | **Required.** FK → PropertyAdministration.                            |
+| Contractor      | `companyId`          | UUID | Optional. FK → Company. Empty until the contractor creates their Company. |
+| PropertyManager | `administrationId`   | UUID | Optional. FK → PropertyAdministration. Empty until the property manager creates their administration; set together with `administrationRole` (check constraint). |
 | PropertyManager | `administrationRole` | enum | `admin` \| `member`. Replaces the former `propertyRole` (`admin` \| `owner`). |
 
 A direct client can have several homes. The link is stored on the home itself (`Property.directClientId`), not on the profile. The first home is registered at onboarding.
@@ -568,7 +568,9 @@ Every endpoint requires a valid access token unless its required role is "None".
 | Method | Path                                    | Description                                                                  | Required role  |
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
 | GET    | `/health`                               | API and database health.                                                     | None           |
-| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A property manager also creates their administration (`administrationName`, as `admin`), a contractor their Company (`companyName`), a direct client their first home (`home`: `street`, `number`, `postalCode`, `intersection`), and a tradesman may give their `trades`. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
+| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A direct client also registers their first home (`home`: `street`, `number`, `postalCode`, `intersection`), and a tradesman may give their `trades`. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
+| POST   | `/me/administration`                    | Create the caller's administration (`name`), with them as its `admin`. `409` if they already have one. The front end refreshes the token afterwards, since the administration is in the claims. | Property manager |
+| POST   | `/me/company`                           | Create the caller's Company (`name`). `409` if they already have one. | Contractor |
 | GET    | `/me`                                   | The caller's User. A direct client's includes their `homes` (`id`, `address`), the properties they can book for. `404` before onboarding. | Authenticated (onboarded or not) |
 | PUT    | `/me/trades`                            | Replace the caller's trades.                                                 | Tradesman      |
 | GET    | `/me/invitations`                       | Pending, non-expired invitations for the caller's email.                     | Authenticated (onboarded or not) |
@@ -639,7 +641,7 @@ sequenceDiagram
     FE->>API: GET /me/invitations
     API-->>FE: Pending invitations for the email
     FE->>API: POST /me { invitationId | profile type, name, ... }
-    API->>DB: Create User (role, email, auth0Sub)<br/>+ administration or Company, if applicable
+    API->>DB: Create User (role, email, auth0Sub)<br/>+ the direct client's home, if applicable
     API->>A0: Management API: set app_metadata
     API-->>FE: 201 User
     FE->>A0: Refresh token
@@ -649,9 +651,10 @@ sequenceDiagram
 
 1. The person signs in with Google through Auth0's Universal Login. On the first sign-in, Auth0 creates the account, but the person is not a User of the app yet, so the token has no profile claims. The front end calls `GET /me`, which returns `404` until onboarding is completed.
 2. The front end calls `GET /me/invitations`. If there are pending invitations for the person's email, the person can accept one: `POST /me` with the `invitationId` and their personal data.
-   Otherwise, the person chooses their profile type and calls `POST /me` with it and their personal data. A property manager also gives their administration's name, and a contractor their Company's name.
-3. The API creates the User and, in the same transaction, the property manager's administration, the contractor's Company, or the accepted invitation's link. Then it writes the same data to the Auth0 account's `app_metadata` (Management API). The database is the source of truth; `app_metadata` is a copy.
-4. The front end gets a new token (also through the refresh token). From then on, a Post-Login Action copies `app_metadata` into the token's claims on every sign-in and token refresh.
+   Otherwise, the person chooses their profile type and calls `POST /me` with it and their personal data. A direct client also gives their first home.
+3. The API creates the User and, in the same transaction, the direct client's home or the accepted invitation's link. Then it writes the same data to the Auth0 account's `app_metadata` (Management API). The database is the source of truth; `app_metadata` is a copy.
+4. A property manager or a contractor then creates their administration (`POST /me/administration`) or Company (`POST /me/company`) in a separate screen. Creating an administration writes `app_metadata` again, and the front end refreshes the token.
+5. The front end gets a new token (also through the refresh token). From then on, a Post-Login Action copies `app_metadata` into the token's claims on every sign-in and token refresh.
 
 If writing `app_metadata` fails after the User is saved, `POST /me` returns `502`. Retrying it finds the existing User and writes `app_metadata` again, so the person is never stuck with a User but no claims.
 
@@ -666,8 +669,8 @@ The Post-Login Action (source in `auth0/actions/add-profile-claims.js`) adds the
 | `email`              | Email of the Google account, only if verified. Stored on the User at onboarding; later used to match invitations. |
 | `userId`             | Our User's `id`, so the API never has to look the User up by `sub`.   |
 | `role`               | Profile type.                                                         |
-| `administrationId`   | Property managers only.                                               |
-| `administrationRole` | Property managers only (`admin` \| `member`).                         |
+| `administrationId`   | Property managers only, once they have an administration.             |
+| `administrationRole` | Property managers only, once they have an administration (`admin` \| `member`). |
 
 The `role` claim can also be `platformOwner`. It is set by hand in the `app_metadata` of a password account (with no `userId`, since the platform owner is not a User). See [7.3](#73-platform-owner-accounts).
 

@@ -15,7 +15,7 @@ export class AdministrationsController {
   @Post()
   @Roles('platformOwner')
   @ApiOperation({
-    summary: 'Create a property administration. Temporary: administrations are created at property manager onboarding.',
+    summary: 'Create a property administration. Platform owner only: property managers use POST /me/administration.',
   })
   create(@Body() dto: CreateAdministrationDto): Promise<Administration> {
     return this.administrationsService.create(dto);
