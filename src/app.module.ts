@@ -6,6 +6,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { HealthModule } from './health/health.module.js';
+import { MunicipalitiesModule } from './municipalities/municipalities.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { PropertiesModule } from './properties/properties.module.js';
 import { TasksModule } from './tasks/tasks.module.js';
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module.js';
     TradesmenModule,
     TasksModule,
     AdminModule,
+    MunicipalitiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

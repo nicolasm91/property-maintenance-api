@@ -5,12 +5,17 @@ import { Trade, User } from '../../entities/user.entity.js';
 import { CreateUserData, NewProfile, UsersRepository } from '../users.repository.js';
 
 const summary = { select: { id: true, name: true } } as const;
+const municipalitySummary = { select: { id: true, name: true, provinceName: true } } as const;
 
 const userInclude = {
   propertyManager: { include: { administration: summary } },
   contractor: { include: { company: summary } },
-  tradesman: true,
-  homes: { orderBy: { createdAt: 'asc' } },
+  tradesman: {
+    include: {
+      municipalities: { select: { municipality: municipalitySummary }, orderBy: { municipality: { name: 'asc' } } },
+    },
+  },
+  homes: { orderBy: { createdAt: 'asc' }, include: { municipality: municipalitySummary } },
 } satisfies Prisma.UserInclude;
 
 type UserRow = Prisma.UserGetPayload<{ include: typeof userInclude }>;
@@ -27,7 +32,15 @@ const toUser = ({ propertyManager, contractor, tradesman, homes, auth0Sub: _auth
     case 'contractor':
       return { ...row, role: row.role, company: contractor!.company };
     case 'tradesman':
-      return { ...row, role: row.role, trades: tradesman!.trades, contractorId: tradesman!.contractorId };
+      return {
+        ...row,
+        role: row.role,
+        trades: tradesman!.trades,
+        contractorId: tradesman!.contractorId,
+        municipalities: tradesman!.municipalities.map(({ municipality }) => municipality),
+        ratingAverage: tradesman!.ratingAverage === null ? null : Number(tradesman!.ratingAverage),
+        ratingCount: tradesman!.ratingCount,
+      };
     case 'directClient':
       return {
         ...row,
@@ -40,6 +53,7 @@ const toUser = ({ propertyManager, contractor, tradesman, homes, auth0Sub: _auth
             postalCode: home.addressPostalCode,
             intersection: home.addressIntersection,
           },
+          municipality: home.municipality,
         })),
       };
   }
@@ -59,13 +73,22 @@ const profileData = (profile: NewProfile): Omit<Prisma.UserCreateInput, 'auth0Su
             addressNumber: profile.home.number,
             addressPostalCode: profile.home.postalCode,
             addressIntersection: profile.home.intersection,
+            municipalityId: profile.home.municipalityId,
           },
         },
       };
     case 'contractor':
       return { role: profile.role, contractor: { create: {} } };
     case 'tradesman':
-      return { role: profile.role, tradesman: { create: { trades: profile.trades } } };
+      return {
+        role: profile.role,
+        tradesman: {
+          create: {
+            trades: profile.trades,
+            municipalities: { create: profile.municipalityIds.map((municipalityId) => ({ municipalityId })) },
+          },
+        },
+      };
   }
 };
 
@@ -100,6 +123,20 @@ export class PrismaUsersRepository implements UsersRepository {
       return null;
     }
     return this.findById(userId);
+  }
+
+  async updateMunicipalities(userId: string, municipalityIds: string[]): Promise<User | null> {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (!(await tx.tradesman.findUnique({ where: { userId } }))) {
+        return false;
+      }
+      await tx.tradesmanMunicipality.deleteMany({ where: { tradesmanId: userId } });
+      await tx.tradesmanMunicipality.createMany({
+        data: municipalityIds.map((municipalityId) => ({ municipalityId, tradesmanId: userId })),
+      });
+      return true;
+    });
+    return updated ? this.findById(userId) : null;
   }
 
   async createAdministration(userId: string, name: string): Promise<User | null> {

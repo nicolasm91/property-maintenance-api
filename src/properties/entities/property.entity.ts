@@ -2,6 +2,8 @@ export const PROPERTY_TYPES = ['house', 'building'] as const;
 
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
+import { MunicipalitySummary } from '../../municipalities/entities/municipality.entity.js';
+
 export class Address {
   street: string;
   number: string;
@@ -20,6 +22,8 @@ export class Property {
   address: Address;
   administration: AdministrationSummary | null;
   directClientId: string | null;
+  // Null only on properties created before municipalities existed.
+  municipality: MunicipalitySummary | null;
   createdAt: Date;
   updatedAt: Date;
 }

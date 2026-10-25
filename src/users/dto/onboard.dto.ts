@@ -15,6 +15,12 @@ import { PROFILE_TYPES, type ProfileType, TRADES, type Trade } from '../entities
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
+export class HomeDto extends AddressDto {
+  @IsString()
+  @IsNotEmpty()
+  municipalityId: string;
+}
+
 export class OnboardDto {
   @IsIn(PROFILE_TYPES)
   profileType: ProfileType;
@@ -34,11 +40,11 @@ export class OnboardDto {
   @IsNotEmpty()
   lastName: string;
 
-  @ApiPropertyOptional({ type: AddressDto, description: 'Required for directClient: their first home.' })
+  @ApiPropertyOptional({ type: () => HomeDto, description: 'Required for directClient: their first home.' })
   @ValidateIf((dto: OnboardDto) => dto.profileType === 'directClient')
   @ValidateNested()
-  @Type(() => AddressDto)
-  home?: AddressDto;
+  @Type(() => HomeDto)
+  home?: HomeDto;
 
   @ApiPropertyOptional({ enum: TRADES, isArray: true, description: 'Tradesmen only. Zero or more trades.' })
   @IsOptional()
@@ -46,4 +52,11 @@ export class OnboardDto {
   @ArrayUnique()
   @IsIn(TRADES, { each: true })
   trades?: Trade[];
+
+  @ApiPropertyOptional({ type: [String], description: 'Tradesmen only: the municipalities they work in.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  municipalityIds?: string[];
 }

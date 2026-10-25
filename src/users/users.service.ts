@@ -1,8 +1,10 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Identity, isPasswordAccount } from '../auth/auth-user.js';
 import { IdentityProvider, ProfileMetadata } from '../auth/identity-provider.js';
+import { MunicipalitiesService } from '../municipalities/municipalities.service.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { OnboardDto } from './dto/onboard.dto.js';
+import { UpdateMunicipalitiesDto } from './dto/update-municipalities.dto.js';
 import { UpdateTradesDto } from './dto/update-trades.dto.js';
 import { User } from './entities/user.entity.js';
 import { NewProfile, UsersRepository } from './repositories/users.repository.js';
@@ -12,6 +14,7 @@ export class UsersService {
   constructor(
     private readonly users: UsersRepository,
     private readonly identityProvider: IdentityProvider,
+    private readonly municipalitiesService: MunicipalitiesService,
   ) {}
 
   async findMe(identity: Identity): Promise<User> {
@@ -34,6 +37,7 @@ export class UsersService {
       if (!identity.email) {
         throw new ForbiddenException('A verified email is required');
       }
+      await this.municipalitiesService.assertExist(onboardingMunicipalityIds(dto));
       user = await this.users.create({
         auth0Sub: identity.sub,
         email: identity.email,
@@ -65,6 +69,15 @@ export class UsersService {
     return user;
   }
 
+  async updateMunicipalities(userId: string, dto: UpdateMunicipalitiesDto): Promise<User> {
+    await this.municipalitiesService.assertExist(dto.municipalityIds);
+    const user = await this.users.updateMunicipalities(userId, dto.municipalityIds);
+    if (!user) {
+      throw new NotFoundException(`Tradesman ${userId} not found`);
+    }
+    return user;
+  }
+
   async updateTrades(userId: string, dto: UpdateTradesDto): Promise<User> {
     const user = await this.users.updateTrades(userId, dto.trades);
     if (!user) {
@@ -72,6 +85,13 @@ export class UsersService {
     }
     return user;
   }
+}
+
+function onboardingMunicipalityIds(dto: OnboardDto): string[] {
+  if (dto.profileType === 'directClient') {
+    return [dto.home!.municipalityId];
+  }
+  return dto.profileType === 'tradesman' ? (dto.municipalityIds ?? []) : [];
 }
 
 function toNewProfile(dto: OnboardDto): NewProfile {
@@ -83,7 +103,7 @@ function toNewProfile(dto: OnboardDto): NewProfile {
     case 'contractor':
       return { role: dto.profileType };
     case 'tradesman':
-      return { role: dto.profileType, trades: dto.trades ?? [] };
+      return { role: dto.profileType, trades: dto.trades ?? [], municipalityIds: dto.municipalityIds ?? [] };
   }
 }
 

@@ -58,12 +58,19 @@ describe('Platform owner (e2e)', () => {
       name: 'Luis',
       lastName: 'Pérez',
       trades: ['plumber'],
+      municipalityIds: ['022007'],
     });
     const client = await signUp('client', {
       profileType: 'directClient',
       name: 'Ana',
       lastName: 'García',
-      home: { street: 'Av. Corrientes', number: '1234', postalCode: 'C1043', intersection: 'Talcahuano' },
+      home: {
+        street: 'Av. Corrientes',
+        number: '1234',
+        postalCode: 'C1043',
+        intersection: 'Talcahuano',
+        municipalityId: '022007',
+      },
     });
     const { body: task } = await request(app.getHttpServer())
       .post('/tasks')

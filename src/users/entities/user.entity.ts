@@ -1,4 +1,5 @@
 import { type AdministrationRole } from '../../auth/auth-user.js';
+import { MunicipalitySummary } from '../../municipalities/entities/municipality.entity.js';
 import { Address } from '../../properties/entities/property.entity.js';
 
 export const PROFILE_TYPES = ['propertyManager', 'directClient', 'contractor', 'tradesman'] as const;
@@ -17,6 +18,8 @@ export class NamedReference {
 export class Home {
   id: string;
   address: Address;
+  // Null only on homes created before municipalities existed.
+  municipality: MunicipalitySummary | null;
 }
 
 // Classes, not interfaces, so the OpenAPI document can describe each role's User.
@@ -52,6 +55,10 @@ export class TradesmanUser extends BaseUser {
   role: 'tradesman';
   trades: Trade[];
   contractorId: string | null;
+  // Their service area.
+  municipalities: MunicipalitySummary[];
+  ratingAverage: number | null;
+  ratingCount: number;
 }
 
 export type User = PropertyManagerUser | DirectClientUser | ContractorUser | TradesmanUser;

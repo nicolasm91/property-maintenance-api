@@ -21,9 +21,11 @@ export interface TaskFilter {
 
 export interface StatusChange {
   from: readonly TaskStatus[];
-  to: 'completed' | 'cancelled' | 'rejected';
+  to: 'done' | 'completed' | 'cancelled' | 'rejected';
   actorId: string;
   reason: string | null;
+  // Required to complete a task.
+  rating?: number;
 }
 
 export abstract class TasksRepository {
@@ -32,8 +34,9 @@ export abstract class TasksRepository {
   abstract create(data: CreateTaskData): Promise<Task>;
   abstract findById(id: string): Promise<Task | null>;
   abstract findAll(filter: TaskFilter): Promise<Task[]>;
-  // Records the matching event atomically. Throws ConflictException if the
-  // task is no longer in one of the `from` statuses (a concurrent change).
+  // Records the matching event atomically, and completing a task also adds its
+  // rating to the tradesman's. Throws ConflictException if the task is no
+  // longer in one of the `from` statuses (a concurrent change).
   abstract changeStatus(id: string, change: StatusChange): Promise<Task>;
   abstract findEvents(taskId: string): Promise<TaskEvent[]>;
 }

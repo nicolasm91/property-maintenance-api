@@ -3,6 +3,7 @@ import { Address, AdministrationAssignment, Property, PropertyType } from '../en
 export interface CreatePropertyData {
   propertyType: PropertyType;
   address: Address;
+  municipalityId: string;
   administrationId: string | null;
 }
 
