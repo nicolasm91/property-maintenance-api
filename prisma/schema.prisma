@@ -1,6 +1,10 @@
+// Explicit ESM with .js imports: inferred from tsconfig.json otherwise, which the
+// Docker build doesn't have yet when it installs dependencies.
 generator client {
-  provider = "prisma-client"
-  output   = "../src/prisma/generated"
+  provider            = "prisma-client"
+  output              = "../src/prisma/generated"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
 }
 
 datasource db {

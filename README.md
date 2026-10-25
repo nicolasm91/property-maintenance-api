@@ -39,6 +39,8 @@ Runs the API and the [web app](https://github.com/nicolasm91/property-maintenanc
 docker compose up --build    # API on :3000, web on :5173
 ```
 
+Compose builds the `dev` stage of the Dockerfile. Its last stage, `prod`, is the production image (compiled once, production dependencies only, `node dist/main.js`); Render builds that one by default.
+
 After changing dependencies, recreate the containers' `node_modules`:
 
 ```bash
