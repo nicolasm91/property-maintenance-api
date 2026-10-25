@@ -25,6 +25,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
+    "db:seed:tradesmen": "prisma db execute --file prisma/seeds/tradesmen.sql",
     "format:check": "oxfmt --check \"src/**/*.ts\" \"test/**/*.ts\""
   },
   "dependencies": {

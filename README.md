@@ -51,6 +51,10 @@ With the API running, Swagger UI is at [http://localhost:3000/docs](http://local
 
 Platform owner (superadmin) accounts sign in with a username and password and need a one-time Auth0 setup: see [Platform owner accounts](docs/system-design.md#73-platform-owner-accounts).
 
+## Test data
+
+`pnpm db:seed:tradesmen` loads 24 independent tradesmen (at least six per trade) into the database in `DATABASE_URL`, for development only. They aren't Auth0 accounts, so nobody can sign in as them, but direct clients can find and book them. Running it again skips the ones that already exist, so it also brings back any you deleted from the superadmin panel.
+
 ## Compile and run the project
 
 ```bash
