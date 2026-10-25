@@ -20,11 +20,11 @@ The MVP covers a single end-to-end flow: **a direct client books an independent 
 
 | In scope (MVP) | Out of scope (post-MVP) |
 | -------------- | ----------------------- |
-| Sign-up with Google and onboarding: choosing the profile type, a direct client registering their first home, a tradesman setting and updating their trades. | Registering more than one home per direct client. |
-| A direct client searching independent tradesmen by trade and viewing their free slots. | Tasks created by property managers, and anything else administration-related beyond what is already built (onboarding, properties, change of administration). |
+| Sign-up with Google and onboarding: choosing the profile type, a direct client registering their first home (with its municipality), a tradesman setting and updating their trades and the municipalities they work in. | Registering more than one home per direct client. |
+| A direct client searching independent tradesmen by trade and municipality (paginated, by rating) and viewing their free slots. | Tasks created by property managers, and anything else administration-related beyond what is already built (onboarding, properties, change of administration). |
 | Booking a slot, which creates a task assigned to the tradesman, with slot and collision rules. | Contractors receiving, assigning, reassigning, rejecting, or completing tasks. |
-| The tradesman's agenda: listing their tasks, marking them as completed, and rejecting them (with an optional reason). | Invitations and transactional email. |
-| A direct client listing and cancelling their tasks (with a mandatory reason). | Availability settings, rescheduling, and in-app notifications (`Future`). |
+| The tradesman's agenda: listing their tasks, marking them as done, and rejecting them (with an optional reason). | Invitations and transactional email. |
+| A direct client listing and cancelling their tasks (with a mandatory reason), and confirming finished ones with a 1 to 5 rating. | Availability settings, rescheduling, and in-app notifications (`Future`). |
 | Task history (`TaskEvent`). | |
 
 Property manager and contractor onboarding, administrations, and properties are already implemented. They are kept, but not extended during the MVP.
@@ -46,6 +46,8 @@ Property manager and contractor onboarding, administrations, and properties are 
 | Task                    | A repair or maintenance job created by a property manager or a direct client, and assigned to a contractor or directly to a tradesman.                                    |
 | Profile type            | The kind of user a person is in the app (`propertyManager`, `directClient`, `contractor`, `tradesman`). Chosen by the person when they sign up. |
 | Onboarding              | The step after a person's first sign-in in which they choose their profile type and become a User of the app. |
+| Service area            | The municipalities a tradesman works in. They are only found and booked for homes in those municipalities. |
+| Municipality            | A locality of the catalog: Argentina's municipalities, from the national Georef service, plus the 15 comunas of the City of Buenos Aires. |
 | Slot                    | A start time for a job, on the hour or half hour between 07:00 and 18:30. It is not the job's duration: the 30-minute grid only spaces bookings out across a tradesman's day. A direct client books a tradesman by picking one of their free slots. |
 | Agenda                  | A tradesman's scheduled tasks, ordered by date.                                                                             |
 
@@ -58,9 +60,9 @@ Property manager and contractor onboarding, administrations, and properties are 
 | Platform owner             | Owner of the application (superadmin). Signs in with a username and password, never with SSO. See [7.3](#73-platform-owner-accounts). | List and force-delete Users of any profile type, e.g. to repeat sign-up tests with the same Google account. Administrations and Companies are created by their own users at sign-up. |
 | Property manager (admin)   | Administrator of a property administration. _Placeholder name._                            | Create and manage the administration's member users. Everything a member can do. |
 | Property manager (member)  | User created by an admin, with restricted permissions. _Placeholder name._                 | Create, assign, and cancel tasks, and view existing tasks (for now).                                   |
-| Direct client              | Private individual requesting repairs for their own home. Not part of any administration.  | Register their home, search tradesmen by trade, book a slot with one (which creates a task for their home), and cancel their tasks. |
-| Contractor                 | Belongs to a Company. Receives tasks and has tradesmen at their service.                   | Receive tasks, assign or reassign them to one of their tradesmen, reject them, or mark them as completed. |
-| Tradesman                  | Performs repair work in one or more trades, independently or at the service of a contractor. | View their agenda (their tasks), mark tasks as completed, reject tasks assigned to them directly, and update their trades. |
+| Direct client              | Private individual requesting repairs for their own home. Not part of any administration.  | Register their home, search tradesmen by trade and municipality, book a slot with one (which creates a task for their home), cancel their tasks, and confirm and rate finished ones. |
+| Contractor                 | Belongs to a Company. Receives tasks and has tradesmen at their service.                   | Receive tasks, assign or reassign them to one of their tradesmen, reject them, or mark them as done. |
+| Tradesman                  | Performs repair work in one or more trades, independently or at the service of a contractor. | View their agenda (their tasks), mark tasks as done, reject tasks assigned to them directly, and update their trades and the municipalities they work in. |
 
 Business rules:
 
@@ -88,10 +90,12 @@ Business rules:
 - A rejected direct client task ends as `rejected`. To try again, the client books a new slot, which creates a new task. Direct client tasks are never reused.
 - The administration sets the task's date when creating it, before handing it to the contractor. A direct client sets it by booking a slot of the tradesman.
 - Tasks will be reschedulable in the future. Administration tasks can be rescheduled by the administration or the contractor; direct client tasks by the direct client or the assigned professional.
-- A task can be marked as completed by its tradesman or by the contractor who holds it.
+- A task is marked as **done** by its tradesman or by the contractor who holds it. It is **completed** only when the person who requested it confirms it and rates the tradesman (see [Completion and rating rules](#task)).
 - A task on an administration's building can be cancelled by any property manager of that administration. A direct client's task can be cancelled by that direct client. A cancellation requires a reason.
 - The full history of a task (creation, assignments, reassignments, rejections, completion, cancellation) is kept, including who did each action.
-- The tradesman's experience must be minimal: they only see their tasks and mark them as completed.
+- The tradesman's experience must be minimal: they only see their tasks and mark them as done.
+- A tradesman works in a set of municipalities (their **service area**) and can only be found and booked there.
+- Every property is in a municipality of the catalog (see [Municipality](#municipality)).
 - Every task has a title, a description, the trade it requires, and a status.
 - A Company groups one or more contractors. A contractor belongs to a Company once they create it.
 - A person who signs up as a contractor creates their own Company in a separate step after sign-up. Contractors are usually one-person companies, so joining an existing Company is not supported for now.
@@ -126,7 +130,7 @@ Sign-up rules:
 | FR-004 | Direct clients can create tasks for their home by booking a slot with a tradesman (FR-038). Booking a contractor is not supported for now. | MVP | Pending |
 | FR-005 | A task can be assigned to a contractor or directly to a tradesman. | Post-MVP | Pending |
 | FR-006 | A contractor can assign a task they received to one of their tradesmen. | Post-MVP | Pending |
-| FR-007 | Direct clients can search independent tradesmen by trade. Searching contractors: future. | MVP | Pending |
+| FR-007 | Direct clients can search independent tradesmen by trade and municipality (FR-044). Searching contractors: future. | MVP | Pending |
 | FR-008 | A building's administration can be changed, keeping the history of past assignments. | Post-MVP | Pending |
 | FR-009 | After a change of administration, the new administration can view tasks managed by previous administrations of the building. The previous administration loses access to them. | Post-MVP | Pending |
 | FR-010 | After a change of administration, the new administration can continue managing the building's open tasks. | Post-MVP | Pending |
@@ -136,13 +140,13 @@ Sign-up rules:
 | FR-014 | A direct client can register more than one home. | Post-MVP | Pending |
 | FR-015 | When rejecting a task, the contractor or tradesman can optionally give a reason. | MVP | Pending |
 | FR-016 | A rejected administration task returns to `unassigned` so its creator can assign it to another professional. | MVP | Pending |
-| FR-017 | Every task exposes its current status (`unassigned`, `assigned`, `completed`, `cancelled`, `rejected`). | MVP | Pending |
+| FR-017 | Every task exposes its current status (`unassigned`, `assigned`, `done`, `completed`, `cancelled`, `rejected`). | MVP | Pending |
 | FR-018 | Any property manager of the administration (or the direct client, for their own tasks) can cancel a task before it is completed, giving a mandatory reason. | MVP | Pending |
 | FR-019 | A task can be rejected at any point before it is completed or cancelled. | MVP | Pending |
 | FR-020 | The full history of each task (who did what, and when) is kept and can be viewed. | MVP | Pending |
-| FR-021 | A tradesman can list their tasks (their agenda), ordered by date, and mark them as completed. | MVP | Pending |
+| FR-021 | A tradesman can list their tasks (their agenda), ordered by date, and mark them as done (FR-046). | MVP | Pending |
 | FR-022 | The administration sets the date of a task (`scheduledAt`) when creating it. | Post-MVP | Pending |
-| FR-023 | A contractor can mark a task they hold as completed. | Post-MVP | Pending |
+| FR-023 | A contractor can mark a task they hold as done (FR-046). | Post-MVP | Pending |
 | FR-024 | Direct client tasks are always created with a date: the booked slot. Replaces the former rule (tasks without a date, agreed with the professional later). | MVP | Pending |
 | FR-025 | Tradesman availability settings (working hours, days off). For now every slot without a task is free. | Future | Future |
 | FR-026 | Reschedule a task (change its date), recording a `rescheduled` event. Allowed for the administration or the contractor (administration tasks), and for the direct client or the assigned professional (direct client tasks). | Future | Future |
@@ -160,6 +164,12 @@ Sign-up rules:
 | FR-039 | Tasks start at a slot: every 30 minutes, from 07:00 to 18:30. A slot is when the job starts, not how long it takes. | MVP | Pending |
 | FR-040 | A tradesman cannot have two tasks in the same slot. Booking a taken slot fails. | MVP | Pending |
 | FR-041 | A tradesman can update their trades after onboarding. | MVP | Pending |
+| FR-042 | A tradesman chooses the municipalities they work in (their service area), at onboarding and later. Without at least one, they don't appear in searches. | MVP | Pending |
+| FR-043 | Every property is in a municipality of the catalog: a direct client picks it for their home. | MVP | Pending |
+| FR-044 | Direct clients search tradesmen by trade and municipality, with paginated results ordered by rating. | MVP | Pending |
+| FR-045 | A tradesman can only be booked for a home in a municipality they work in. | MVP | Pending |
+| FR-046 | The tradesman (or the contractor holding the task) marks a task as done. The person who requested it then confirms it and rates the tradesman, which completes it. Replaces the former rule (the tradesman completed the task). | MVP | Pending |
+| FR-047 | A rating is 1 to 5 stars, mandatory when confirming a task, one per task. Searches show each tradesman's average rating and number of ratings. | MVP | Pending |
 | FR-029 | On first sign-in, the person chooses their profile type (property manager, direct client, contractor, or tradesman). Platform owner cannot be chosen. | MVP | Pending |
 
 ### 3.2 Non-functional requirements
@@ -171,7 +181,7 @@ Sign-up rules:
 | NFR-003 | Security      | `TBD`       | `TBD`           |
 | NFR-004 | Scalability   | `TBD`       | `TBD`           |
 | NFR-005 | Observability | `TBD`       | `TBD`           |
-| NFR-006 | Usability     | The tradesman's flow must be minimal: see their tasks and mark them as completed, nothing else. | `TBD` |
+| NFR-006 | Usability     | The tradesman's flow must be minimal: see their tasks and mark them as done, nothing else. | `TBD` |
 
 ---
 
@@ -262,6 +272,8 @@ src/properties/
 | Company                | Company that groups contractors.                                    |
 | PropertyAdministration | Organization (client) that manages condominium associations.                  |
 | Property               | A house or building.                                                |
+| Municipality           | A locality of the catalog, where properties are and tradesmen work. |
+| TradesmanMunicipality  | A municipality in a tradesman's service area.                       |
 | AdministrationAssignment | Historical record of which administration a building had, and when. |
 | Unit                   | A functional unit inside a property.                                |
 | Task                   | A repair or maintenance job.                                        |
@@ -288,6 +300,8 @@ Each role has a profile with role-specific fields:
 | --------------- | -------------------- | ---- | --------------------------------------------------------------------- |
 | Tradesman       | `trades`             | enum[] | Zero or more trades. See [Trade](#trade).                           |
 | Tradesman       | `contractorId`       | UUID | Optional. FK → User (contractor). Empty for independent tradesmen. A tradesman works for **one contractor at a time** (for now). |
+| Tradesman       | `ratingCount`        | integer | Number of ratings received. Starts at 0. |
+| Tradesman       | `ratingAverage`      | decimal | Optional. Average of the ratings received, 1 to 5; empty with no ratings. Kept up to date in the transaction that completes a task, so searches can sort by it. |
 | Contractor      | `companyId`          | UUID | Optional. FK → Company. Empty until the contractor creates their Company. |
 | PropertyManager | `administrationId`   | UUID | Optional. FK → PropertyAdministration. Empty until the property manager creates their administration; set together with `administrationRole` (check constraint). |
 | PropertyManager | `administrationRole` | enum | `admin` \| `member`. Replaces the former `propertyRole` (`admin` \| `owner`). |
@@ -297,6 +311,31 @@ A direct client can have several homes. The link is stored on the home itself (`
 #### Trade
 
 Enum: `electrician`, `handyman`, `plumber`, `mason` (list to be extended). A tradesman may choose them at onboarding (optional).
+
+#### Municipality
+
+The catalog of localities where properties are and tradesmen work: every municipality of the national [Georef](https://datosgobar.github.io/georef-ar-api/) service, plus the 15 comunas of the City of Buenos Aires (CABA) as separate localities. Georef does not list CABA as a municipality, but it lists its comunas as departments.
+
+| Field          | Type   | Notes                                                  |
+| -------------- | ------ | ------------------------------------------------------ |
+| `id`           | string | Primary key: Georef's municipality id, or for a CABA comuna, Georef's department id. |
+| `name`         | string | For CABA comunas, "Comuna 1" to "Comuna 15".            |
+| `provinceId`   | string | Georef's province id.                                  |
+| `provinceName` | string |                                                        |
+
+Rules:
+
+- The catalog is a snapshot of Georef, loaded by a data migration: it is reference data every environment needs. If Georef changes, a new migration updates it. The API never calls Georef at runtime.
+- Municipalities are never deleted while a property or a tradesman uses them.
+
+#### TradesmanMunicipality
+
+| Field            | Type   | Notes                                  |
+| ---------------- | ------ | -------------------------------------- |
+| `tradesmanId`    | UUID   | FK → Tradesman. Part of the primary key. |
+| `municipalityId` | string | FK → Municipality. Part of the primary key. |
+
+The primary key starts with `municipalityId`, so finding the tradesmen of a municipality is an index lookup (see [ADR-008](#11-architecture-decision-records-adr)).
 
 #### Company
 
@@ -323,6 +362,7 @@ Enum: `electrician`, `handyman`, `plumber`, `mason` (list to be extended). A tra
 | `address`      | object | See below.                                         |
 | `administrationId` | UUID | FK → PropertyAdministration **currently** assigned to the building. Empty for direct clients' homes. Past assignments live in [AdministrationAssignment](#administrationassignment). |
 | `directClientId` | UUID | FK → User (direct client) who owns this home. Empty for buildings managed by an administration. |
+| `municipalityId` | string | FK → Municipality. Required for every new property. Rows created before it existed may be empty until filled in by hand (development data only). |
 
 `address`:
 
@@ -367,11 +407,13 @@ Rules:
 | `title`       | string    | Short summary of the job.                              |
 | `description` | text      | Details of the problem / work to be done.              |
 | `trade`       | enum      | Trade required for the job. See [Trade](#trade).       |
-| `status`      | enum      | `unassigned` \| `assigned` \| `completed` \| `cancelled` \| `rejected`. See [lifecycle](#53-states-and-lifecycles). |
+| `status`      | enum      | `unassigned` \| `assigned` \| `done` \| `completed` \| `cancelled` \| `rejected`. See [lifecycle](#53-states-and-lifecycles). |
 | `createdAt`   | timestamp |                                                        |
 | `updatedAt`   | timestamp |                                                        |
 | `scheduledAt` | timestamp | Start of the slot in which the work is planned. Administration tasks: set when creating the task. Direct client tasks: the booked slot. |
-| `completedAt` | timestamp | Optional. Set when the work is finished.               |
+| `doneAt`      | timestamp | Optional. Set when the tradesman or contractor marks the work as done. |
+| `completedAt` | timestamp | Optional. Set when the requester confirms the work.    |
+| `rating`      | integer   | Optional. 1 to 5, set when the requester confirms the work. |
 | `cancelledAt` | timestamp | Optional. Set when the task is cancelled.              |
 | `createdBy`   | UUID      | FK → User (property manager or direct client) who created the task. |
 | `contractorId`| UUID      | Optional. FK → User (contractor), when assigned to a contractor. |
@@ -403,11 +445,12 @@ Slot rules:
 Booking rules (direct clients):
 
 - The direct client picks an **independent** tradesman (no contractor), a trade the tradesman has, one of their own homes, and a free slot.
+- The home's municipality must be in the tradesman's service area. Otherwise the booking fails with `400`.
 - Booking creates the task already `assigned` to the tradesman, with no confirmation step. The tradesman can reject it like any task assigned to them directly, which ends it as `rejected` and frees the slot.
 
 Agenda and collision rules:
 
-- A tradesman's agenda is their tasks that are not `cancelled` or `rejected`, ordered by `scheduledAt`.
+- A tradesman's agenda is their tasks that are not `cancelled` or `rejected` (so it includes `done` and `completed` ones), ordered by `scheduledAt`.
 - A slot is taken for a tradesman when they have a task in it that is not `cancelled` or `rejected`. This applies to every task with a `tradesmanId`, also when a contractor assigns one of their tradesmen to an administration task.
 - Assigning a tradesman to a slot they already have taken fails with `409`.
 - Enforced by a partial unique index on (`tradesmanId`, `scheduledAt`) for tasks that are not `cancelled` or `rejected` (see ADR-004), so two concurrent bookings of the same slot cannot both succeed.
@@ -421,7 +464,7 @@ Assignment rules:
 - The task's company is not stored on `Task`; it is derived from the assigned contractor (`Contractor.companyId`).
 - A contractor can reject a task assigned to them, or reassign it to another of their tradesmen.
 - A tradesman can reject a task **only** if it was assigned to them directly. Tasks received through their contractor cannot be rejected by the tradesman.
-- A task can be rejected at any point before it is `completed` or `cancelled`.
+- A task can be rejected only while it is `assigned`: once marked as done, it can no longer be rejected.
 - A rejected administration task becomes **unassigned**: `contractorId` and `tradesmanId` are cleared and `status` goes back to `unassigned`, so another professional can be picked. `scheduledAt` is kept, since the administration defined it.
 - A rejected direct client task becomes **`rejected`**, a final status. `tradesmanId` and `scheduledAt` are kept as a record. The client books a new slot to try again, which creates a new task.
 
@@ -431,6 +474,15 @@ Cancellation rules:
 - A direct client's task can be cancelled by that direct client.
 - A task can be cancelled while it is `unassigned` or `assigned`.
 - A cancellation **requires** a reason, and is recorded in the task's history.
+
+Completion and rating rules:
+
+- The tradesman assigned to the task, or the contractor who holds it, marks it as `done` (`doneAt`). The task must be `assigned`.
+- The person who requested the work confirms it: the direct client who booked it, or, for administration tasks (post-MVP), any property manager of the administration. Confirming requires a rating of 1 to 5 and moves the task to `completed` (`completedAt`, `rating`).
+- A task can only be confirmed while it is `done`, and only once: the rating cannot be changed.
+- Confirming updates the tradesman's `ratingCount` and `ratingAverage` in the same transaction, guarded on the task still being `done`, so two concurrent confirmations cannot both count.
+- The rating belongs to the tradesman who did the work (`tradesmanId`), also when the task was held by a contractor.
+- A `done` task keeps its slot taken. It cannot be cancelled or rejected.
 
 #### Invitation
 
@@ -466,13 +518,14 @@ Append-only history of a task. Every relevant action creates one row, in the sam
 | -------------- | --------- | ----------------------------------------------------------------------------------------- |
 | `id`           | UUID      | Primary key.                                                                              |
 | `taskId`       | UUID      | FK → Task.                                                                                |
-| `type`         | enum      | `created` \| `assigned` \| `reassigned` \| `rejected` \| `rescheduled` \| `completed` \| `cancelled`. `rescheduled` will be used once rescheduling exists. |
+| `type`         | enum      | `created` \| `assigned` \| `reassigned` \| `rejected` \| `rescheduled` \| `done` \| `completed` \| `cancelled`. `rescheduled` will be used once rescheduling exists. |
 | `actorId`      | UUID      | FK → User who performed the action.                                                       |
 | `occurredAt`   | timestamp |                                                                                           |
 | `contractorId` | UUID      | Optional. For `assigned` / `reassigned`: the new contractor. For `rejected`: the one who held the task. |
 | `companyId`    | UUID      | Optional. Contractor's company at the time of the event (snapshot, since a contractor may change company later). |
 | `tradesmanId`  | UUID      | Optional. Same as above, for the tradesman.                                               |
 | `reason`       | text      | **Required** for `cancelled`. Optional for `rejected`. Empty otherwise.                   |
+| `rating`       | integer   | For `completed`: the rating given. Empty otherwise.                                       |
 
 Rules:
 
@@ -495,6 +548,9 @@ erDiagram
     Contractor |o--o{ Tradesman : "has at service"
 
     PropertyAdministration |o--o{ Property : "currently administers"
+    Municipality ||--o{ Property : contains
+    Tradesman ||--o{ TradesmanMunicipality : "works in"
+    Municipality ||--o{ TradesmanMunicipality : "served by"
     Property ||--o{ AdministrationAssignment : "assignment history"
     PropertyAdministration ||--o{ AdministrationAssignment : "assignment history"
     DirectClient |o--o{ Property : owns
@@ -527,7 +583,8 @@ stateDiagram-v2
     assigned --> assigned : contractor assigns / reassigns tradesman
     assigned --> unassigned : rejected (administration task)
     assigned --> rejected : rejected (direct client task)
-    assigned --> completed : completed by tradesman or contractor
+    assigned --> done : marked as done by tradesman or contractor
+    done --> completed : confirmed and rated by the requester
     unassigned --> cancelled : cancelled (reason required)
     assigned --> cancelled : cancelled (reason required)
     completed --> [*]
@@ -539,7 +596,8 @@ stateDiagram-v2
 | ------------ | --------------------------------------------------------------------------------------- |
 | `unassigned` | No contractor or tradesman. Initial state, or after an administration task is rejected. |
 | `assigned`   | Assigned to a contractor (with or without a tradesman yet) or directly to a tradesman. |
-| `completed`  | The work is finished (`completedAt`). Final.                                             |
+| `done`       | The tradesman or contractor says the work is finished (`doneAt`). Waits for the requester's confirmation. |
+| `completed`  | The requester confirmed the work and rated the tradesman (`completedAt`, `rating`). Final. |
 | `cancelled`  | Cancelled before completion (`cancelledAt`). Final.                                      |
 | `rejected`   | A direct client task rejected by its tradesman. Final: the client books a new task instead. |
 
@@ -557,7 +615,7 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 - **Versioning:** `TBD`
 - **Format:** JSON
 - **Resource naming:** `TBD`
-- **Pagination:** `TBD`
+- **Pagination:** cursor-based for lists that can grow without bound (first: `GET /tradesmen`). Query `?cursor=&limit=` (`limit` 1 to 50, default 20); response `{ "items": [...], "nextCursor": string | null }`. The cursor is opaque to clients: pass back `nextCursor` to get the next page. Lists bounded per user (a client's tasks, a tradesman's agenda) are not paginated for now.
 - **Filtering and sorting:** `TBD`
 - **Dates:** ISO 8601 in UTC
 - **Documentation:** OpenAPI 3, generated from the code (`@nestjs/swagger` with its CLI plugin, so DTOs and entity classes describe themselves). Swagger UI at `/docs`, the JSON document at `/docs/openapi.json`. Entities are classes, not interfaces, so the document can describe responses; `User` is a union of one class per profile type (`oneOf`).
@@ -569,11 +627,14 @@ Every endpoint requires a valid access token unless its required role is "None".
 | Method | Path                                    | Description                                                                  | Required role  |
 | ------ | --------------------------------------- | ---------------------------------------------------------------------------- | -------------- |
 | GET    | `/health`                               | API and database health.                                                     | None           |
-| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A direct client also registers their first home (`home`: `street`, `number`, `postalCode`, `intersection`), and a tradesman may give their `trades`. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
+| POST   | `/me`                                   | Onboarding: create the caller's User with the chosen profile type (`profileType`, `name`, `middleName`, `lastName`). A direct client also registers their first home (`home`: `street`, `number`, `postalCode`, `intersection`, `municipalityId`), and a tradesman may give their `trades` and `municipalityIds`. If the caller already has a User, it re-syncs `app_metadata` and returns it. | Authenticated (onboarded or not) |
 | POST   | `/me/administration`                    | Create the caller's administration (`name`), with them as its `admin`. `409` if they already have one. The front end refreshes the token afterwards, since the administration is in the claims. | Property manager |
 | POST   | `/me/company`                           | Create the caller's Company (`name`). `409` if they already have one. | Contractor |
-| GET    | `/me`                                   | The caller's User. A direct client's includes their `homes` (`id`, `address`), the properties they can book for. `404` before onboarding. | Authenticated (onboarded or not) |
+| GET    | `/me`                                   | The caller's User. A direct client's includes their `homes` (`id`, `address`, `municipality`), the properties they can book for; a tradesman's, their `municipalities` and rating (`ratingAverage`, `ratingCount`). `404` before onboarding. | Authenticated (onboarded or not) |
 | PUT    | `/me/trades`                            | Replace the caller's trades.                                                 | Tradesman      |
+| PUT    | `/me/municipalities`                    | Replace the caller's service area (`municipalityIds`). `400` for an unknown municipality. | Tradesman      |
+| GET    | `/provinces`                            | Every province of the catalog, by name.                                      | Authenticated (onboarded or not) |
+| GET    | `/municipalities?provinceId=&search=`   | Municipalities of the catalog, by name: of a province, and/or whose name contains `search` (ignoring case and accents). At most 50. | Authenticated (onboarded or not) |
 | GET    | `/me/invitations`                       | Pending, non-expired invitations for the caller's email.                     | Authenticated (onboarded or not) |
 | POST   | `/invitations/:id/accept`               | An existing User accepts an invitation for their email.                      | Invited User   |
 | POST   | `/invitations/:id/decline`              | Decline an invitation for the caller's email.                                | Invited person |
@@ -583,16 +644,17 @@ Every endpoint requires a valid access token unless its required role is "None".
 | POST   | `/administrations`                      | Create a property administration. Temporary: with auth, administrations are created at property manager onboarding (`POST /me`). | Platform owner |
 | GET    | `/administrations`                      | List administrations.                                                        | Platform owner |
 | GET    | `/administrations/:id`                  | Get an administration.                                                       | Platform owner, or a property manager of that administration |
-| POST   | `/properties`                           | Create a property, optionally assigned to an administration.                 | Platform owner (any administration), or a property manager (always their own administration) |
+| POST   | `/properties`                           | Create a property (with its `municipalityId`), optionally assigned to an administration. | Platform owner (any administration), or a property manager (always their own administration) |
 | GET    | `/properties?administrationId=`         | List properties. Optional filter: buildings currently assigned to an administration. | Platform owner (all), or a property manager (only their administration's) |
 | GET    | `/properties/:id`                       | Get a property with its current administration.                              | Platform owner, or a property manager if the building is currently assigned to their administration |
 | PUT    | `/properties/:id/administration`        | Change the property's administration (closes the current assignment, opens a new one). | Platform owner, until it is defined (see [Open questions](#12-open-questions)) |
 | GET    | `/properties/:id/administration-history`| Administration assignment history, newest first.                             | Same as `GET /properties/:id` |
-| GET    | `/tradesmen?trade=`                     | Independent tradesmen who have the trade.                                    | Direct client  |
+| GET    | `/tradesmen?trade=&municipalityId=&cursor=&limit=` | Independent tradesmen who have the trade and work in the municipality, paginated (see [6.1](#61-conventions)). Ordered by `ratingAverage` (unrated last), then name. Each one with `ratingAverage` and `ratingCount`. | Direct client  |
 | GET    | `/tradesmen/:id/availability?date=`     | The tradesman's free slots on a date (`YYYY-MM-DD`, platform time zone).     | Direct client  |
-| POST   | `/tasks`                                | Book a slot: create a task (`tradesmanId`, `propertyId`, `trade`, `title`, `description`, `scheduledAt`) assigned to the tradesman. `409` if the slot is taken. Task creation by property managers will be added here too. | Direct client  |
+| POST   | `/tasks`                                | Book a slot: create a task (`tradesmanId`, `propertyId`, `trade`, `title`, `description`, `scheduledAt`) assigned to the tradesman. `400` if the home is outside the tradesman's service area, `409` if the slot is taken. Task creation by property managers will be added here too. | Direct client  |
 | GET    | `/tasks?from=&to=`                      | The caller's tasks, ordered by `scheduledAt`, optionally with `scheduledAt` in [`from`, `to`). A tradesman gets their agenda (tasks assigned to them, except `cancelled` and `rejected`); a direct client, every task they created. | Tradesman, direct client |
-| POST   | `/tasks/:id/complete`                   | Mark the task as `completed`. The task must be `assigned`.                   | The tradesman assigned to the task |
+| POST   | `/tasks/:id/done`                       | Mark the task as `done`. The task must be `assigned`.                        | The tradesman assigned to the task (or, post-MVP, the contractor holding it) |
+| POST   | `/tasks/:id/complete`                   | Confirm the work and rate the tradesman (`rating`, 1 to 5): the task becomes `completed`. The task must be `done`. Replaces the former endpoint, with which the tradesman completed the task. | The direct client who created the task |
 | POST   | `/tasks/:id/reject`                     | Reject the task, with an optional `reason`. A direct client task ends as `rejected`. The task must be `assigned`. | The tradesman, if assigned to the task directly |
 | POST   | `/tasks/:id/cancel`                     | Cancel the task, with a mandatory `reason`. The task must be `unassigned` or `assigned`. | The direct client who created the task |
 | GET    | `/tasks/:id/events`                     | The task's history, oldest first, with actor and reason.                     | The direct client who created the task, or the tradesman assigned to it |
@@ -761,6 +823,7 @@ Then the API clears the profile keys of the Auth0 account's `app_metadata`, so t
 | ADR-003 | 2026-10-21 | Naming: `camelCase` in code and API, `snake_case` in the database (tables and columns, via Prisma `@map`). Primary keys are named `id` (UUID). | Accepted |
 | ADR-004 | 2026-10-21 | Invariants Prisma cannot express are enforced in hand-written migration SQL. First case: a partial unique index guaranteeing at most one open `AdministrationAssignment` per property. | Accepted |
 | ADR-005 | 2026-10-21 | Standard NestJS layering (Controller → Service → Repository) with repositories defined as interfaces. Only repository implementations (`repositories/prisma/`) may use Prisma, enforced by lint rules. Goal: the database is not tied to a concrete implementation. | Accepted |
+| ADR-008 | 2026-10-25 | Tradesman search stays in PostgreSQL, without a search engine (e.g. Elasticsearch). Filtering by trade and municipality is an exact match: a `(municipalityId, tradesmanId)` primary key on the service area table and the tradesman's denormalized rating make it an index lookup, paginated by cursor. A search engine would add a service to run and keep in sync, with stale results, for no gain on exact filters. To revisit if search needs free text or relevance ranking over many signals. | Accepted |
 | ADR-007 | 2026-10-24 | Platform owners sign in with a username and password through an Auth0 database connection with sign-ups disabled, not with SSO, and the API only accepts the `platformOwner` claim on those accounts (`auth0|` subs). Passwords stay in Auth0; the API does not store credentials or issue its own tokens. | Accepted |
 | ADR-006 | 2026-10-22 | Use Auth0 as identity provider, with Google SSO. People sign up by themselves and choose their profile type at onboarding. The User's profile data lives in our database (source of truth), is copied to Auth0 `app_metadata`, and reaches the token as claims through a Post-Login Action. The API authorizes from the claims alone, without a database lookup per request; stale claims are accepted because profile types are not expected to change. | Accepted |
 
@@ -792,3 +855,7 @@ Deferred (not part of the current business-focused design phase):
 - [ ] Job durations: blocking the slots a job is expected to take, instead of only its start slot.
 - [ ] Restrict which days have slots (e.g. weekends, holidays). Every day has slots for now, but this is expected to be restricted.
 - [ ] More than one time zone.
+- [ ] To be defined: what happens to a `done` task the requester never confirms (e.g. completed automatically after some days, without a rating)?
+- [ ] To be defined: can the requester dispute a `done` task (the work was not finished)?
+- [x] How to handle CABA in the municipality catalog: as its 15 comunas, each a separate locality.
+- [ ] Rating comments, and showing a tradesman's ratings on their profile.
