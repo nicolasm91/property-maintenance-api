@@ -27,7 +27,13 @@ const manager: User = {
 
 describe('UsersService', () => {
   let service: UsersService;
-  const repository = { findByAuth0Sub: vi.fn(), create: vi.fn(), updateTrades: vi.fn() };
+  const repository = {
+    findByAuth0Sub: vi.fn(),
+    create: vi.fn(),
+    updateTrades: vi.fn(),
+    createAdministration: vi.fn(),
+    createCompany: vi.fn(),
+  };
   const identityProvider = { setProfileMetadata: vi.fn() };
 
   beforeEach(async () => {
@@ -43,19 +49,14 @@ describe('UsersService', () => {
   });
 
   describe('onboard', () => {
-    it('creates a property manager with their administration and syncs the claims', async () => {
+    it('creates a property manager without administration and syncs the claims', async () => {
+      const newManager: User = { ...manager, administration: null, administrationRole: null };
       repository.findByAuth0Sub.mockResolvedValue(null);
-      repository.create.mockResolvedValue(manager);
+      repository.create.mockResolvedValue(newManager);
 
       await expect(
-        service.onboard(identity, {
-          profileType: 'propertyManager',
-          name: 'Ana',
-          middleName: '',
-          lastName: 'García',
-          administrationName: 'Admin Ana',
-        }),
-      ).resolves.toBe(manager);
+        service.onboard(identity, { profileType: 'propertyManager', name: 'Ana', middleName: '', lastName: 'García' }),
+      ).resolves.toBe(newManager);
 
       expect(repository.create).toHaveBeenCalledWith({
         auth0Sub: identity.sub,
@@ -63,13 +64,11 @@ describe('UsersService', () => {
         name: 'Ana',
         middleName: null,
         lastName: 'García',
-        profile: { role: 'propertyManager', administrationName: 'Admin Ana' },
+        profile: { role: 'propertyManager' },
       });
       expect(identityProvider.setProfileMetadata).toHaveBeenCalledWith(identity.sub, {
         userId: 'u1',
         role: 'propertyManager',
-        administrationId: 'a1',
-        administrationRole: 'admin',
       });
     });
 
@@ -128,7 +127,6 @@ describe('UsersService', () => {
           profileType: 'contractor',
           name: 'Ana',
           lastName: 'García',
-          companyName: 'Ana SRL',
         }),
       ).resolves.toBe(manager);
 
@@ -156,12 +154,50 @@ describe('UsersService', () => {
       repository.findByAuth0Sub.mockResolvedValue(null);
 
       await expect(
-        service.onboard(
-          { ...identity, email: null },
-          { profileType: 'contractor', name: 'Ana', lastName: 'García', companyName: 'Ana SRL' },
-        ),
+        service.onboard({ ...identity, email: null }, { profileType: 'contractor', name: 'Ana', lastName: 'García' }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createAdministration', () => {
+    it('creates it and syncs the claims with the administration', async () => {
+      repository.createAdministration.mockResolvedValue(manager);
+
+      await expect(service.createAdministration(identity, 'u1', { name: 'Admin Ana' })).resolves.toBe(manager);
+
+      expect(repository.createAdministration).toHaveBeenCalledWith('u1', 'Admin Ana');
+      expect(identityProvider.setProfileMetadata).toHaveBeenCalledWith(identity.sub, {
+        userId: 'u1',
+        role: 'propertyManager',
+        administrationId: 'a1',
+        administrationRole: 'admin',
+      });
+    });
+
+    it('throws 404 when the User is not a property manager', async () => {
+      repository.createAdministration.mockResolvedValue(null);
+
+      await expect(service.createAdministration(identity, 'u1', { name: 'Admin Ana' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(identityProvider.setProfileMetadata).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createCompany', () => {
+    it('creates it', async () => {
+      const contractor: User = { ...base, role: 'contractor', company: { id: 'k1', name: 'Ana SRL' } };
+      repository.createCompany.mockResolvedValue(contractor);
+
+      await expect(service.createCompany('u1', { name: 'Ana SRL' })).resolves.toBe(contractor);
+      expect(repository.createCompany).toHaveBeenCalledWith('u1', 'Ana SRL');
+    });
+
+    it('throws 404 when the User is not a contractor', async () => {
+      repository.createCompany.mockResolvedValue(null);
+
+      await expect(service.createCompany('u1', { name: 'Ana SRL' })).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

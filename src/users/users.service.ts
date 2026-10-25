@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Identity, isPasswordAccount } from '../auth/auth-user.js';
 import { IdentityProvider, ProfileMetadata } from '../auth/identity-provider.js';
+import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { OnboardDto } from './dto/onboard.dto.js';
 import { UpdateTradesDto } from './dto/update-trades.dto.js';
 import { User } from './entities/user.entity.js';
@@ -46,6 +47,24 @@ export class UsersService {
     return user;
   }
 
+  async createAdministration(identity: Identity, userId: string, dto: CreateOrganizationDto): Promise<User> {
+    const user = await this.users.createAdministration(userId, dto.name);
+    if (!user) {
+      throw new NotFoundException(`Property manager ${userId} not found`);
+    }
+    // The administration reaches the token as claims: the front end refreshes it.
+    await this.identityProvider.setProfileMetadata(identity.sub, toProfileMetadata(user));
+    return user;
+  }
+
+  async createCompany(userId: string, dto: CreateOrganizationDto): Promise<User> {
+    const user = await this.users.createCompany(userId, dto.name);
+    if (!user) {
+      throw new NotFoundException(`Contractor ${userId} not found`);
+    }
+    return user;
+  }
+
   async updateTrades(userId: string, dto: UpdateTradesDto): Promise<User> {
     const user = await this.users.updateTrades(userId, dto.trades);
     if (!user) {
@@ -58,23 +77,23 @@ export class UsersService {
 function toNewProfile(dto: OnboardDto): NewProfile {
   switch (dto.profileType) {
     case 'propertyManager':
-      return { role: dto.profileType, administrationName: dto.administrationName! };
+      return { role: dto.profileType };
     case 'directClient':
       return { role: dto.profileType, home: dto.home! };
     case 'contractor':
-      return { role: dto.profileType, companyName: dto.companyName! };
+      return { role: dto.profileType };
     case 'tradesman':
       return { role: dto.profileType, trades: dto.trades ?? [] };
   }
 }
 
 function toProfileMetadata(user: User): ProfileMetadata {
-  if (user.role === 'propertyManager') {
+  if (user.role === 'propertyManager' && user.administration) {
     return {
       userId: user.id,
       role: user.role,
       administrationId: user.administration.id,
-      administrationRole: user.administrationRole,
+      administrationRole: user.administrationRole!,
     };
   }
   return { userId: user.id, role: user.role };

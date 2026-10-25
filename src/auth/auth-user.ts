@@ -13,8 +13,9 @@ export type AuthUser =
   | {
       role: 'propertyManager';
       userId: string;
-      administrationId: string;
-      administrationRole: AdministrationRole;
+      // Both null until the property manager creates their administration.
+      administrationId: string | null;
+      administrationRole: AdministrationRole | null;
     }
   | { role: 'directClient' | 'contractor' | 'tradesman'; userId: string };
 

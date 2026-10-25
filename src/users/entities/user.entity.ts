@@ -32,8 +32,9 @@ class BaseUser {
 
 export class PropertyManagerUser extends BaseUser {
   role: 'propertyManager';
-  administration: NamedReference;
-  administrationRole: AdministrationRole;
+  // Both null until they create their administration (POST /me/administration).
+  administration: NamedReference | null;
+  administrationRole: AdministrationRole | null;
 }
 
 export class DirectClientUser extends BaseUser {
@@ -43,7 +44,8 @@ export class DirectClientUser extends BaseUser {
 
 export class ContractorUser extends BaseUser {
   role: 'contractor';
-  company: NamedReference;
+  // Null until they create their Company (POST /me/company).
+  company: NamedReference | null;
 }
 
 export class TradesmanUser extends BaseUser {

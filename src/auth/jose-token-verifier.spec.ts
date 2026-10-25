@@ -47,6 +47,12 @@ describe('JoseTokenVerifier', () => {
     });
   });
 
+  it('maps a property manager who has not created their administration yet', async () => {
+    await expect(verifier.verify(await sign({ role: 'propertyManager', userId: 'u1' }))).resolves.toMatchObject({
+      user: { role: 'propertyManager', userId: 'u1', administrationId: null, administrationRole: null },
+    });
+  });
+
   it('maps the platform owner of a password account, without userId', async () => {
     const token = await sign({ role: 'platformOwner' }, { subject: 'auth0|admin' });
 
@@ -74,7 +80,7 @@ describe('JoseTokenVerifier', () => {
     ['an unknown role', { role: 'superAdmin', userId: 'u1' }],
     ['a missing userId', { role: 'directClient' }],
     [
-      'a property manager without administration',
+      'an administrationRole without administration',
       { role: 'propertyManager', userId: 'u1', administrationRole: 'admin' },
     ],
     [

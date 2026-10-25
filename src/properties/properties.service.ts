@@ -36,7 +36,10 @@ export class PropertiesService {
 
   async findOne(id: string, user: AuthUser): Promise<Property> {
     const property = await this.findOneOrThrow(id);
-    if (user.role === 'propertyManager' && property.administration?.id !== user.administrationId) {
+    if (
+      user.role === 'propertyManager' &&
+      (!user.administrationId || property.administration?.id !== user.administrationId)
+    ) {
       throw new ForbiddenException();
     }
     if (user.role === 'directClient' && property.directClientId !== user.userId) {
@@ -72,6 +75,9 @@ export class PropertiesService {
   private scopeToOwnAdministration(administrationId: string | undefined, user: AuthUser) {
     if (user.role !== 'propertyManager') {
       return administrationId;
+    }
+    if (!user.administrationId) {
+      throw new ForbiddenException('Create your administration first');
     }
     if (administrationId && administrationId !== user.administrationId) {
       throw new ForbiddenException();

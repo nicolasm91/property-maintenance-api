@@ -60,14 +60,18 @@ function toAuthUser(payload: JWTPayload): AuthUser | null {
   if (role !== 'propertyManager') {
     return { role, userId };
   }
+  const administrationId = claim('administrationId');
   const administrationRole = claim('administrationRole');
+  if (administrationId === undefined && administrationRole === undefined) {
+    return { role, userId, administrationId: null, administrationRole: null };
+  }
   if (!isOneOf(ADMINISTRATION_ROLES, administrationRole)) {
     throw new InvalidTokenError('Invalid administrationRole claim');
   }
   return {
     role,
     userId,
-    administrationId: requireString(claim('administrationId'), 'administrationId'),
+    administrationId: requireString(administrationId, 'administrationId'),
     administrationRole,
   };
 }

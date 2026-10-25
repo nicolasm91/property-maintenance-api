@@ -34,20 +34,6 @@ export class OnboardDto {
   @IsNotEmpty()
   lastName: string;
 
-  @ApiPropertyOptional({ description: 'Required for propertyManager: the administration they create.' })
-  @ValidateIf((dto: OnboardDto) => dto.profileType === 'propertyManager')
-  @Transform(trim)
-  @IsString()
-  @IsNotEmpty()
-  administrationName?: string;
-
-  @ApiPropertyOptional({ description: 'Required for contractor: the Company they create.' })
-  @ValidateIf((dto: OnboardDto) => dto.profileType === 'contractor')
-  @Transform(trim)
-  @IsString()
-  @IsNotEmpty()
-  companyName?: string;
-
   @ApiPropertyOptional({ type: AddressDto, description: 'Required for directClient: their first home.' })
   @ValidateIf((dto: OnboardDto) => dto.profileType === 'directClient')
   @ValidateNested()
