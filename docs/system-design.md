@@ -47,7 +47,7 @@ Property manager and contractor onboarding, administrations, and properties are 
 | Profile type            | The kind of user a person is in the app (`propertyManager`, `directClient`, `contractor`, `tradesman`). Chosen by the person when they sign up. |
 | Onboarding              | The step after a person's first sign-in in which they choose their profile type and become a User of the app. |
 | Service area            | The municipalities a tradesman works in. They are only found and booked for homes in those municipalities. |
-| Municipality            | A locality of the catalog: Argentina's municipalities, from the national Georef service, plus the City of Buenos Aires as a single locality. |
+| Municipality            | A locality of the catalog: Argentina's municipalities, from the national Georef service, plus the 15 comunas of the City of Buenos Aires. |
 | Slot                    | A start time for a job, on the hour or half hour between 07:00 and 18:30. It is not the job's duration: the 30-minute grid only spaces bookings out across a tradesman's day. A direct client books a tradesman by picking one of their free slots. |
 | Agenda                  | A tradesman's scheduled tasks, ordered by date.                                                                             |
 
@@ -314,12 +314,12 @@ Enum: `electrician`, `handyman`, `plumber`, `mason` (list to be extended). A tra
 
 #### Municipality
 
-The catalog of localities where properties are and tradesmen work: every municipality of the national [Georef](https://datosgobar.github.io/georef-ar-api/) service, plus the City of Buenos Aires (CABA) as a single locality, since Georef does not list it as a municipality.
+The catalog of localities where properties are and tradesmen work: every municipality of the national [Georef](https://datosgobar.github.io/georef-ar-api/) service, plus the 15 comunas of the City of Buenos Aires (CABA) as separate localities. Georef does not list CABA as a municipality, but it lists its comunas as departments.
 
 | Field          | Type   | Notes                                                  |
 | -------------- | ------ | ------------------------------------------------------ |
-| `id`           | string | Primary key: Georef's municipality id (for CABA, Georef's province id `02`). |
-| `name`         | string |                                                        |
+| `id`           | string | Primary key: Georef's municipality id, or for a CABA comuna, Georef's department id. |
+| `name`         | string | For CABA comunas, "Comuna 1" to "Comuna 15".            |
 | `provinceId`   | string | Georef's province id.                                  |
 | `provinceName` | string |                                                        |
 
@@ -855,7 +855,7 @@ Deferred (not part of the current business-focused design phase):
 - [ ] Job durations: blocking the slots a job is expected to take, instead of only its start slot.
 - [ ] Restrict which days have slots (e.g. weekends, holidays). Every day has slots for now, but this is expected to be restricted.
 - [ ] More than one time zone.
-- [ ] What happens to a `done` task the requester never confirms (e.g. completed automatically after some days, without a rating)?
-- [ ] Can the requester dispute a `done` task (the work was not finished)?
-- [ ] Split CABA into its 15 comunas or 48 barrios as separate localities.
+- [ ] To be defined: what happens to a `done` task the requester never confirms (e.g. completed automatically after some days, without a rating)?
+- [ ] To be defined: can the requester dispute a `done` task (the work was not finished)?
+- [x] How to handle CABA in the municipality catalog: as its 15 comunas, each a separate locality.
 - [ ] Rating comments, and showing a tradesman's ratings on their profile.
