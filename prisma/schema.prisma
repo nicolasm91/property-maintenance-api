@@ -37,16 +37,20 @@ model Property {
   // Denormalized copy of the open assignment, for cheap reads.
   administrationId    String?      @map("administration_id") @db.Uuid
   directClientId      String?      @map("direct_client_id") @db.Uuid
+  // Required by the API; null only on rows created before municipalities existed.
+  municipalityId      String?      @map("municipality_id")
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz
 
   administration PropertyAdministration?    @relation(fields: [administrationId], references: [id])
   directClient   User?                      @relation(fields: [directClientId], references: [id])
+  municipality   Municipality?              @relation(fields: [municipalityId], references: [id], onDelete: Restrict)
   assignments    AdministrationAssignment[]
   tasks          Task[]
 
   @@index([administrationId])
   @@index([directClientId])
+  @@index([municipalityId])
   @@map("properties")
 }
 
@@ -153,22 +157,59 @@ model Contractor {
 }
 
 model Tradesman {
-  userId       String  @id @map("user_id") @db.Uuid
-  trades       Trade[]
-  contractorId String? @map("contractor_id") @db.Uuid
+  userId        String   @id @map("user_id") @db.Uuid
+  trades        Trade[]
+  contractorId  String?  @map("contractor_id") @db.Uuid
+  // Kept in the transaction that completes a task. The sum keeps the average
+  // exact; the average is stored so searches can sort by it.
+  ratingSum     Int      @default(0) @map("rating_sum")
+  ratingCount   Int      @default(0) @map("rating_count")
+  ratingAverage Decimal? @map("rating_average") @db.Decimal(5, 4)
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contractor Contractor? @relation(fields: [contractorId], references: [userId])
-  tasks      Task[]
-  taskEvents TaskEvent[]
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractor     Contractor?             @relation(fields: [contractorId], references: [userId])
+  tasks          Task[]
+  taskEvents     TaskEvent[]
+  municipalities TradesmanMunicipality[]
 
   @@index([contractorId])
   @@map("tradesmen")
 }
 
+// Snapshot of Georef, loaded by a data migration.
+model Municipality {
+  id           String @id
+  name         String
+  // name lowercased and without accents, for accent-insensitive search.
+  searchName   String @map("search_name")
+  provinceId   String @map("province_id")
+  provinceName String @map("province_name")
+
+  properties Property[]
+  tradesmen  TradesmanMunicipality[]
+
+  @@index([provinceId])
+  @@map("municipalities")
+}
+
+// A tradesman's service area. The key starts with the municipality, so the
+// tradesmen of a municipality are an index lookup.
+model TradesmanMunicipality {
+  municipalityId String @map("municipality_id")
+  tradesmanId    String @map("tradesman_id") @db.Uuid
+
+  municipality Municipality @relation(fields: [municipalityId], references: [id], onDelete: Restrict)
+  tradesman    Tradesman    @relation(fields: [tradesmanId], references: [userId], onDelete: Cascade)
+
+  @@id([municipalityId, tradesmanId])
+  @@index([tradesmanId])
+  @@map("tradesman_municipalities")
+}
+
 enum TaskStatus {
   unassigned
   assigned
+  done
   completed
   cancelled
   rejected
@@ -182,6 +223,7 @@ enum TaskEventType {
   reassigned
   rejected
   rescheduled
+  done
   completed
   cancelled
 
@@ -197,7 +239,10 @@ model Task {
   trade       Trade
   status      TaskStatus
   scheduledAt DateTime   @map("scheduled_at") @db.Timestamptz
+  doneAt      DateTime?  @map("done_at") @db.Timestamptz
   completedAt DateTime?  @map("completed_at") @db.Timestamptz
+  // 1 to 5 (check constraint), given by the requester when confirming.
+  rating      Int?       @db.SmallInt
   cancelledAt DateTime?  @map("cancelled_at") @db.Timestamptz
   createdById String     @map("created_by_id") @db.Uuid
   tradesmanId String?    @map("tradesman_id") @db.Uuid
@@ -223,6 +268,7 @@ model TaskEvent {
   actorId     String        @map("actor_id") @db.Uuid
   tradesmanId String?       @map("tradesman_id") @db.Uuid
   reason      String?
+  rating      Int?          @db.SmallInt
   occurredAt  DateTime      @default(now()) @map("occurred_at") @db.Timestamptz
 
   task      Task       @relation(fields: [taskId], references: [id])

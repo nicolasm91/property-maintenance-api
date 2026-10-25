@@ -83,7 +83,7 @@ export class PrismaTasksRepository implements TasksRepository {
     return rows.map(toTask);
   }
 
-  changeStatus(id: string, { from, to, actorId, reason }: StatusChange): Promise<Task> {
+  changeStatus(id: string, { from, to, actorId, reason, rating }: StatusChange): Promise<Task> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
       // Guarding on the status makes concurrent changes fail instead of both
@@ -92,8 +92,10 @@ export class PrismaTasksRepository implements TasksRepository {
         where: { id, status: { in: [...from] } },
         data: {
           status: to,
+          doneAt: to === 'done' ? now : undefined,
           completedAt: to === 'completed' ? now : undefined,
           cancelledAt: to === 'cancelled' ? now : undefined,
+          rating: to === 'completed' ? rating : undefined,
         },
       });
       if (count === 0) {
@@ -101,8 +103,25 @@ export class PrismaTasksRepository implements TasksRepository {
       }
       const row = await tx.task.findUniqueOrThrow({ where: { id }, include: taskInclude });
       await tx.taskEvent.create({
-        data: { taskId: id, type: to, actorId, tradesmanId: row.tradesmanId, reason, occurredAt: now },
+        data: {
+          taskId: id,
+          type: to,
+          actorId,
+          tradesmanId: row.tradesmanId,
+          reason,
+          rating: to === 'completed' ? rating : null,
+          occurredAt: now,
+        },
       });
+      if (to === 'completed' && row.tradesmanId && rating) {
+        // One statement, so concurrent ratings of the same tradesman don't lose updates.
+        await tx.$executeRaw`
+          UPDATE "tradesmen"
+          SET "rating_sum" = "rating_sum" + ${rating},
+              "rating_count" = "rating_count" + 1,
+              "rating_average" = ("rating_sum" + ${rating})::numeric / ("rating_count" + 1)
+          WHERE "user_id" = ${row.tradesmanId}::uuid`;
+      }
       return toTask(row);
     });
   }
@@ -110,7 +129,15 @@ export class PrismaTasksRepository implements TasksRepository {
   async findEvents(taskId: string): Promise<TaskEvent[]> {
     const rows = await this.prisma.taskEvent.findMany({
       where: { taskId },
-      select: { id: true, type: true, actor: personSummary, tradesmanId: true, reason: true, occurredAt: true },
+      select: {
+        id: true,
+        type: true,
+        actor: personSummary,
+        tradesmanId: true,
+        reason: true,
+        rating: true,
+        occurredAt: true,
+      },
       orderBy: { occurredAt: 'asc' },
     });
     return rows;

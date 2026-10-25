@@ -9,6 +9,7 @@ import { AuthUser } from '../auth/auth-user.js';
 import { PropertiesService } from '../properties/properties.service.js';
 import { TradesmenService } from '../tradesmen/tradesmen.service.js';
 import { CancelTaskDto } from './dto/cancel-task.dto.js';
+import { CompleteTaskDto } from './dto/complete-task.dto.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { FindTasksQueryDto } from './dto/find-tasks-query.dto.js';
 import { RejectTaskDto } from './dto/reject-task.dto.js';
@@ -37,7 +38,11 @@ export class TasksService {
       throw new BadRequestException(`Tradesman ${dto.tradesmanId} does not work as ${dto.trade}`);
     }
     // Also checks that the property is one of the caller's homes.
-    await this.propertiesService.findOne(dto.propertyId, user);
+    const home = await this.propertiesService.findOne(dto.propertyId, user);
+    if (!home.municipality) {
+      throw new BadRequestException(`Home ${home.id} has no municipality yet`);
+    }
+    await this.tradesmenService.assertServes(dto.tradesmanId, home.municipality.id);
     return this.tasks.create({
       title: dto.title,
       description: dto.description,
@@ -60,13 +65,28 @@ export class TasksService {
     return this.tasks.findAll({ ...range, createdById: user.userId });
   }
 
-  async complete(id: string, user: TradesmanCaller): Promise<Task> {
+  async markDone(id: string, user: TradesmanCaller): Promise<Task> {
     const task = await this.findOneOrThrow(id);
     if (task.tradesman?.id !== user.userId) {
       throw new ForbiddenException();
     }
     assertStatus(task, ['assigned']);
-    return this.tasks.changeStatus(id, { from: ['assigned'], to: 'completed', actorId: user.userId, reason: null });
+    return this.tasks.changeStatus(id, { from: ['assigned'], to: 'done', actorId: user.userId, reason: null });
+  }
+
+  async complete(id: string, dto: CompleteTaskDto, user: DirectClientCaller): Promise<Task> {
+    const task = await this.findOneOrThrow(id);
+    if (task.createdBy.id !== user.userId) {
+      throw new ForbiddenException();
+    }
+    assertStatus(task, ['done']);
+    return this.tasks.changeStatus(id, {
+      from: ['done'],
+      to: 'completed',
+      actorId: user.userId,
+      reason: null,
+      rating: dto.rating,
+    });
   }
 
   async reject(id: string, dto: RejectTaskDto, user: TradesmanCaller): Promise<Task> {

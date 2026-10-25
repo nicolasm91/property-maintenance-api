@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { CancelTaskDto } from './dto/cancel-task.dto.js';
+import { CompleteTaskDto } from './dto/complete-task.dto.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { FindTasksQueryDto } from './dto/find-tasks-query.dto.js';
 import { RejectTaskDto } from './dto/reject-task.dto.js';
@@ -18,7 +19,8 @@ export class TasksController {
   @Post()
   @Roles('directClient')
   @ApiOperation({
-    summary: "Book a free slot of an independent tradesman for one of the caller's homes. 409 if the slot is taken.",
+    summary:
+      "Book a free slot of an independent tradesman for one of the caller's homes. 400 if the home is outside the tradesman's service area, 409 if the slot is taken.",
   })
   create(@Body() dto: CreateTaskDto, @CurrentUser() user: DirectClientCaller): Promise<Task> {
     return this.tasksService.create(dto, user);
@@ -36,12 +38,26 @@ export class TasksController {
     return this.tasksService.findAll(query, user);
   }
 
-  @Post(':id/complete')
+  @Post(':id/done')
   @Roles('tradesman')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Mark an assigned task as completed.' })
-  complete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: TradesmanCaller): Promise<Task> {
-    return this.tasksService.complete(id, user);
+  @ApiOperation({ summary: 'Mark an assigned task as done. It waits for the requester to confirm it.' })
+  markDone(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: TradesmanCaller): Promise<Task> {
+    return this.tasksService.markDone(id, user);
+  }
+
+  @Post(':id/complete')
+  @Roles('directClient')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Confirm a done task and rate the tradesman (1 to 5): the task becomes completed. One rating per task.',
+  })
+  complete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CompleteTaskDto,
+    @CurrentUser() user: DirectClientCaller,
+  ): Promise<Task> {
+    return this.tasksService.complete(id, dto, user);
   }
 
   @Post(':id/reject')

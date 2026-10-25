@@ -16,7 +16,16 @@ describe('Direct client booking (e2e)', () => {
   const sessions = new Map<string, { identity: Identity; user: AuthUser | null }>();
   const userIds: string[] = [];
 
-  const home = { street: 'Av. Corrientes', number: '1234', postalCode: 'C1043', intersection: 'Talcahuano' };
+  // Comuna 1 (CABA) and Avellaneda (Buenos Aires), from the municipality catalog migration.
+  const comuna1 = '022007';
+  const avellaneda = '060035';
+  const home = {
+    street: 'Av. Corrientes',
+    number: '1234',
+    postalCode: 'C1043',
+    intersection: 'Talcahuano',
+    municipalityId: comuna1,
+  };
   // Tomorrow in the platform time zone (UTC-3), so every slot is in the future.
   const day = new Date(Date.now() - 3 * 3_600_000 + 24 * 3_600_000).toISOString().slice(0, 10);
   const slot = (time: string) => new Date(`${day}T${time}:00-03:00`).toISOString();
@@ -75,15 +84,91 @@ describe('Direct client booking (e2e)', () => {
     await app.close();
   });
 
-  it('lets a tradesman update their trades and be found by them', async () => {
+  const search = (municipalityId: string) =>
+    request(app.getHttpServer())
+      .get(`/tradesmen?trade=plumber&municipalityId=${municipalityId}&limit=50`)
+      .set(as('client'))
+      .expect(200)
+      .then(({ body }) => body as { items: { id: string }[]; nextCursor: string | null });
+
+  it('serves the municipality catalog', async () => {
+    const { body: provinces } = await request(app.getHttpServer()).get('/provinces').set(as('client')).expect(200);
+    expect(provinces).toHaveLength(24);
+
+    const { body: comunas } = await request(app.getHttpServer())
+      .get('/municipalities?provinceId=02&search=COMUNA')
+      .set(as('client'))
+      .expect(200);
+    expect(comunas).toHaveLength(15);
+    const { body: buenosAires } = await request(app.getHttpServer())
+      .get('/municipalities?provinceId=06')
+      .set(as('client'))
+      .expect(200);
+    expect(buenosAires.length).toBeGreaterThan(100);
+    expect(comunas).toContainEqual({
+      id: comuna1,
+      name: 'Comuna 1',
+      provinceId: '02',
+      provinceName: 'Ciudad Autónoma de Buenos Aires',
+    });
+  });
+
+  it('finds a tradesman by trade only in the municipalities they work in', async () => {
     await request(app.getHttpServer())
       .put('/me/trades')
       .set(as('tradesman'))
       .send({ trades: ['plumber', 'electrician'] })
       .expect(200);
+    expect((await search(comuna1)).items.map((each) => each.id)).not.toContain(tradesmanId);
 
-    const { body } = await request(app.getHttpServer()).get('/tradesmen?trade=plumber').set(as('client')).expect(200);
-    expect(body).toContainEqual(expect.objectContaining({ id: tradesmanId, trades: ['plumber', 'electrician'] }));
+    await request(app.getHttpServer())
+      .put('/me/municipalities')
+      .set(as('tradesman'))
+      .send({ municipalityIds: ['nope'] })
+      .expect(400);
+    const { body: me } = await request(app.getHttpServer())
+      .put('/me/municipalities')
+      .set(as('tradesman'))
+      .send({ municipalityIds: [comuna1, avellaneda] })
+      .expect(200);
+    expect(me.municipalities).toEqual([
+      { id: avellaneda, name: 'Avellaneda', provinceName: 'Buenos Aires' },
+      { id: comuna1, name: 'Comuna 1', provinceName: 'Ciudad Autónoma de Buenos Aires' },
+    ]);
+
+    const page = await search(comuna1);
+    expect(page.items).toContainEqual(
+      expect.objectContaining({
+        id: tradesmanId,
+        trades: ['plumber', 'electrician'],
+        ratingAverage: null,
+        ratingCount: 0,
+      }),
+    );
+    expect(page).toHaveProperty('nextCursor');
+    expect((await search('140497')).items.map((each) => each.id)).not.toContain(tradesmanId);
+  });
+
+  it("refuses a booking for a home outside the tradesman's service area", async () => {
+    const faraway = await signUp('faraway', {
+      profileType: 'directClient',
+      name: 'Juan',
+      lastName: 'Díaz',
+      home: { ...home, municipalityId: '140497' },
+    });
+
+    await request(app.getHttpServer())
+      .post('/tasks')
+      .set(as('faraway'))
+      .send({
+        tradesmanId,
+        propertyId: faraway.homes![0].id,
+        trade: 'plumber',
+        title: 'Leaking tap',
+        description: 'The kitchen tap drips',
+        scheduledAt: slot('15:00'),
+      })
+      .expect(400);
   });
 
   it('books a free slot, and refuses a slot already taken', async () => {
@@ -110,16 +195,43 @@ describe('Direct client booking (e2e)', () => {
     await book('19:00').expect(400);
   });
 
-  it('runs the task lifecycle: agenda, complete, reject, cancel, history', async () => {
+  it('runs the task lifecycle: agenda, done, rating, reject, cancel, history', async () => {
     const { body: toComplete } = await book('11:00').expect(201);
     const { body: toReject } = await book('11:30').expect(201);
     const { body: toCancel } = await book('12:00').expect(201);
 
     await request(app.getHttpServer())
       .post(`/tasks/${toComplete.id}/complete`)
+      .set(as('client'))
+      .send({ rating: 5 })
+      .expect(409);
+    await request(app.getHttpServer())
+      .post(`/tasks/${toComplete.id}/done`)
       .set(as('tradesman'))
       .expect(200)
-      .expect((response) => expect(response.body.status).toBe('completed'));
+      .expect((response) => expect(response.body.status).toBe('done'));
+    await request(app.getHttpServer()).post(`/tasks/${toComplete.id}/reject`).set(as('tradesman')).send({}).expect(409);
+    await request(app.getHttpServer())
+      .post(`/tasks/${toComplete.id}/complete`)
+      .set(as('client'))
+      .send({ rating: 6 })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post(`/tasks/${toComplete.id}/complete`)
+      .set(as('client'))
+      .send({ rating: 4 })
+      .expect(200)
+      .expect((response) => expect(response.body).toMatchObject({ status: 'completed', rating: 4 }));
+    await request(app.getHttpServer())
+      .post(`/tasks/${toComplete.id}/complete`)
+      .set(as('client'))
+      .send({ rating: 1 })
+      .expect(409);
+    const { body: rated } = await request(app.getHttpServer()).get('/me').set(as('tradesman')).expect(200);
+    expect(rated).toMatchObject({ ratingAverage: 4, ratingCount: 1 });
+    expect((await search(comuna1)).items).toContainEqual(
+      expect.objectContaining({ id: tradesmanId, ratingAverage: 4, ratingCount: 1 }),
+    );
     await request(app.getHttpServer())
       .post(`/tasks/${toReject.id}/reject`)
       .set(as('tradesman'))

@@ -8,6 +8,7 @@ const administrationSummary = { select: { id: true, name: true } } as const;
 
 const propertyInclude = {
   administration: administrationSummary,
+  municipality: { select: { id: true, name: true, provinceName: true } },
 } satisfies Prisma.PropertyInclude;
 
 type PropertyRow = Prisma.PropertyGetPayload<{
@@ -25,6 +26,7 @@ const toProperty = (row: PropertyRow): Property => ({
   },
   administration: row.administration,
   directClientId: row.directClientId,
+  municipality: row.municipality,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -33,7 +35,7 @@ const toProperty = (row: PropertyRow): Property => ({
 export class PrismaPropertiesRepository implements PropertiesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create({ propertyType, address, administrationId }: CreatePropertyData): Promise<Property> {
+  async create({ propertyType, address, municipalityId, administrationId }: CreatePropertyData): Promise<Property> {
     const row = await this.prisma.property.create({
       data: {
         propertyType,
@@ -41,6 +43,7 @@ export class PrismaPropertiesRepository implements PropertiesRepository {
         addressNumber: address.number,
         addressPostalCode: address.postalCode,
         addressIntersection: address.intersection,
+        municipalityId,
         administrationId,
         assignments: administrationId ? { create: { administrationId } } : undefined,
       },

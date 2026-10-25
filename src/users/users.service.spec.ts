@@ -1,7 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Identity } from '../auth/auth-user.js';
 import { IdentityProvider } from '../auth/identity-provider.js';
+import { MunicipalitiesService } from '../municipalities/municipalities.service.js';
 import { User } from './entities/user.entity.js';
 import { UsersRepository } from './repositories/users.repository.js';
 import { UsersService } from './users.service.js';
@@ -33,8 +34,10 @@ describe('UsersService', () => {
     updateTrades: vi.fn(),
     createAdministration: vi.fn(),
     createCompany: vi.fn(),
+    updateMunicipalities: vi.fn(),
   };
   const identityProvider = { setProfileMetadata: vi.fn() };
+  const municipalitiesService = { assertExist: vi.fn() };
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -43,6 +46,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: UsersRepository, useValue: repository },
         { provide: IdentityProvider, useValue: identityProvider },
+        { provide: MunicipalitiesService, useValue: municipalitiesService },
       ],
     }).compile();
     service = module.get(UsersService);
@@ -84,7 +88,7 @@ describe('UsersService', () => {
       });
 
       expect(repository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ profile: { role: 'tradesman', trades: ['plumber'] } }),
+        expect.objectContaining({ profile: { role: 'tradesman', trades: ['plumber'], municipalityIds: [] } }),
       );
       expect(identityProvider.setProfileMetadata).toHaveBeenCalledWith(identity.sub, {
         userId: 'u1',
@@ -99,17 +103,24 @@ describe('UsersService', () => {
       await service.onboard(identity, { profileType: 'tradesman', name: 'Ana', lastName: 'García' });
 
       expect(repository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ profile: { role: 'tradesman', trades: [] } }),
+        expect.objectContaining({ profile: { role: 'tradesman', trades: [], municipalityIds: [] } }),
       );
     });
 
     it('creates a direct client with their first home', async () => {
-      const home = { street: 'Av. Corrientes', number: '1234', postalCode: 'C1043', intersection: 'Talcahuano' };
+      const home = {
+        street: 'Av. Corrientes',
+        number: '1234',
+        postalCode: 'C1043',
+        intersection: 'Talcahuano',
+        municipalityId: '022007',
+      };
       repository.findByAuth0Sub.mockResolvedValue(null);
-      repository.create.mockResolvedValue({ ...base, role: 'directClient', homes: [{ id: 'p1', address: home }] });
+      repository.create.mockResolvedValue({ ...base, role: 'directClient', homes: [] });
 
       await service.onboard(identity, { profileType: 'directClient', name: 'Ana', lastName: 'García', home });
 
+      expect(municipalitiesService.assertExist).toHaveBeenCalledWith(['022007']);
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({ profile: { role: 'directClient', home } }),
       );
@@ -198,6 +209,28 @@ describe('UsersService', () => {
       repository.createCompany.mockResolvedValue(null);
 
       await expect(service.createCompany('u1', { name: 'Ana SRL' })).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('updateMunicipalities', () => {
+    it('checks the municipalities exist and replaces the service area', async () => {
+      const tradesman = { ...base, role: 'tradesman', trades: [], contractorId: null };
+      repository.updateMunicipalities.mockResolvedValue(tradesman);
+
+      await expect(service.updateMunicipalities('u1', { municipalityIds: ['022007', '060035'] })).resolves.toBe(
+        tradesman,
+      );
+      expect(municipalitiesService.assertExist).toHaveBeenCalledWith(['022007', '060035']);
+      expect(repository.updateMunicipalities).toHaveBeenCalledWith('u1', ['022007', '060035']);
+    });
+
+    it('fails for an unknown municipality without saving', async () => {
+      municipalitiesService.assertExist.mockRejectedValue(new BadRequestException());
+
+      await expect(service.updateMunicipalities('u1', { municipalityIds: ['nope'] })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(repository.updateMunicipalities).not.toHaveBeenCalled();
     });
   });
 

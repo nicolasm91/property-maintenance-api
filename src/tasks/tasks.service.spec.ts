@@ -18,7 +18,9 @@ const task: Task = {
   trade: 'plumber',
   status: 'assigned',
   scheduledAt: new Date('2026-11-02T13:00:00Z'),
+  doneAt: null,
   completedAt: null,
+  rating: null,
   cancelledAt: null,
   property: {
     id: 'p1',
@@ -48,7 +50,7 @@ describe('TasksService', () => {
     changeStatus: vi.fn(),
     findEvents: vi.fn(),
   };
-  const tradesmenService = { findBookable: vi.fn() };
+  const tradesmenService = { findBookable: vi.fn(), assertServes: vi.fn() };
   const propertiesService = { findOne: vi.fn() };
 
   beforeEach(async () => {
@@ -72,6 +74,23 @@ describe('TasksService', () => {
   describe('create', () => {
     beforeEach(() => {
       tradesmenService.findBookable.mockResolvedValue({ id: 't1', trades: ['plumber'], contractorId: null });
+      propertiesService.findOne.mockResolvedValue({ id: 'p1', municipality: { id: '060035', name: 'Avellaneda' } });
+    });
+
+    it("checks that the home is in the tradesman's service area", async () => {
+      tradesmenService.assertServes.mockRejectedValue(new BadRequestException());
+
+      await expect(service.create(booking, client)).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(tradesmenService.assertServes).toHaveBeenCalledWith('t1', '060035');
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('throws 400 for a home without municipality', async () => {
+      propertiesService.findOne.mockResolvedValue({ id: 'p1', municipality: null });
+
+      await expect(service.create(booking, client)).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.create).not.toHaveBeenCalled();
     });
 
     it("books the slot for one of the caller's homes", async () => {
@@ -139,15 +158,15 @@ describe('TasksService', () => {
     });
   });
 
-  describe('complete', () => {
-    it('completes a task assigned to the tradesman', async () => {
+  describe('markDone', () => {
+    it('marks a task assigned to the tradesman as done', async () => {
       repository.findById.mockResolvedValue(task);
 
-      await service.complete('k1', tradesmanUser);
+      await service.markDone('k1', tradesmanUser);
 
       expect(repository.changeStatus).toHaveBeenCalledWith('k1', {
         from: ['assigned'],
-        to: 'completed',
+        to: 'done',
         actorId: 't1',
         reason: null,
       });
@@ -156,20 +175,49 @@ describe('TasksService', () => {
     it('throws 403 for a task of another tradesman', async () => {
       repository.findById.mockResolvedValue({ ...task, tradesman: person('t2') });
 
-      await expect(service.complete('k1', tradesmanUser)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.markDone('k1', tradesmanUser)).rejects.toBeInstanceOf(ForbiddenException);
     });
 
-    it.each(['completed', 'cancelled', 'rejected'] as const)('throws 409 for a %s task', async (status) => {
+    it.each(['done', 'completed', 'cancelled', 'rejected'] as const)('throws 409 for a %s task', async (status) => {
       repository.findById.mockResolvedValue({ ...task, status });
 
-      await expect(service.complete('k1', tradesmanUser)).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.markDone('k1', tradesmanUser)).rejects.toBeInstanceOf(ConflictException);
       expect(repository.changeStatus).not.toHaveBeenCalled();
     });
 
     it('throws 404 when the task does not exist', async () => {
       repository.findById.mockResolvedValue(null);
 
-      await expect(service.complete('missing', tradesmanUser)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.markDone('missing', tradesmanUser)).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('complete', () => {
+    it('confirms a done task with the rating', async () => {
+      repository.findById.mockResolvedValue({ ...task, status: 'done' });
+
+      await service.complete('k1', { rating: 4 }, client);
+
+      expect(repository.changeStatus).toHaveBeenCalledWith('k1', {
+        from: ['done'],
+        to: 'completed',
+        actorId: 'c1',
+        reason: null,
+        rating: 4,
+      });
+    });
+
+    it('throws 403 for a task of another client', async () => {
+      repository.findById.mockResolvedValue({ ...task, status: 'done', createdBy: person('c2') });
+
+      await expect(service.complete('k1', { rating: 4 }, client)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it.each(['assigned', 'completed', 'cancelled', 'rejected'] as const)('throws 409 for a %s task', async (status) => {
+      repository.findById.mockResolvedValue({ ...task, status });
+
+      await expect(service.complete('k1', { rating: 4 }, client)).rejects.toBeInstanceOf(ConflictException);
+      expect(repository.changeStatus).not.toHaveBeenCalled();
     });
   });
 
@@ -228,7 +276,7 @@ describe('TasksService', () => {
       await expect(service.cancel('k1', { reason: 'No' }, client)).rejects.toBeInstanceOf(ForbiddenException);
     });
 
-    it.each(['completed', 'cancelled', 'rejected'] as const)('throws 409 for a %s task', async (status) => {
+    it.each(['done', 'completed', 'cancelled', 'rejected'] as const)('throws 409 for a %s task', async (status) => {
       repository.findById.mockResolvedValue({ ...task, status });
 
       await expect(service.cancel('k1', { reason: 'No' }, client)).rejects.toBeInstanceOf(ConflictException);

@@ -1,7 +1,8 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AdministrationsService } from '../administrations/administrations.service.js';
 import { AuthUser } from '../auth/auth-user.js';
+import { MunicipalitiesService } from '../municipalities/municipalities.service.js';
 import { Property } from './entities/property.entity.js';
 import { PropertiesService } from './properties.service.js';
 import { PropertiesRepository } from './repositories/properties.repository.js';
@@ -19,6 +20,7 @@ const property: Property = {
   address,
   administration: { id: 'a1', name: 'First Administration' },
   directClientId: null,
+  municipality: { id: '060035', name: 'Avellaneda', provinceName: 'Buenos Aires' },
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -41,6 +43,7 @@ describe('PropertiesService', () => {
     findAdministrationHistory: vi.fn(),
   };
   const administrationsService = { findOne: vi.fn() };
+  const municipalitiesService = { assertExist: vi.fn() };
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -49,6 +52,7 @@ describe('PropertiesService', () => {
         PropertiesService,
         { provide: PropertiesRepository, useValue: repository },
         { provide: AdministrationsService, useValue: administrationsService },
+        { provide: MunicipalitiesService, useValue: municipalitiesService },
       ],
     }).compile();
     service = module.get(PropertiesService);
@@ -61,6 +65,7 @@ describe('PropertiesService', () => {
       await service.create(
         {
           propertyType: 'building',
+          municipalityId: '060035',
           address,
           administrationId: 'a1',
         },
@@ -68,18 +73,29 @@ describe('PropertiesService', () => {
       );
 
       expect(administrationsService.findOne).toHaveBeenCalledWith('a1');
+      expect(municipalitiesService.assertExist).toHaveBeenCalledWith(['060035']);
       expect(repository.create).toHaveBeenCalledWith({
         propertyType: 'building',
         address,
+        municipalityId: '060035',
         administrationId: 'a1',
       });
     });
 
     it('creates a property without administration', async () => {
-      await service.create({ propertyType: 'house', address }, platformOwner);
+      await service.create({ propertyType: 'house', municipalityId: '060035', address }, platformOwner);
 
       expect(administrationsService.findOne).not.toHaveBeenCalled();
       expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ administrationId: null }));
+    });
+
+    it('fails for an unknown municipality', async () => {
+      municipalitiesService.assertExist.mockRejectedValue(new BadRequestException());
+
+      await expect(
+        service.create({ propertyType: 'house', municipalityId: 'nope', address }, platformOwner),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.create).not.toHaveBeenCalled();
     });
 
     it('fails when the administration does not exist', async () => {
@@ -89,6 +105,7 @@ describe('PropertiesService', () => {
         service.create(
           {
             propertyType: 'building',
+            municipalityId: '060035',
             address,
             administrationId: 'missing',
           },
@@ -99,7 +116,7 @@ describe('PropertiesService', () => {
     });
 
     it("assigns a property manager's property to their own administration", async () => {
-      await service.create({ propertyType: 'building', address }, manager);
+      await service.create({ propertyType: 'building', municipalityId: '060035', address }, manager);
 
       expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ administrationId: 'a1' }));
     });
@@ -107,7 +124,7 @@ describe('PropertiesService', () => {
     it('throws 403 when the property manager has no administration yet', async () => {
       await expect(
         service.create(
-          { propertyType: 'building', address },
+          { propertyType: 'building', municipalityId: '060035', address },
           { ...manager, administrationId: null, administrationRole: null },
         ),
       ).rejects.toBeInstanceOf(ForbiddenException);
@@ -116,7 +133,10 @@ describe('PropertiesService', () => {
 
     it('throws 403 when a property manager uses another administration', async () => {
       await expect(
-        service.create({ propertyType: 'building', address, administrationId: 'a2' }, manager),
+        service.create(
+          { propertyType: 'building', municipalityId: '060035', address, administrationId: 'a2' },
+          manager,
+        ),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(repository.create).not.toHaveBeenCalled();
     });

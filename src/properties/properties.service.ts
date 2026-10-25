@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AdministrationsService } from '../administrations/administrations.service.js';
+import { MunicipalitiesService } from '../municipalities/municipalities.service.js';
 import { AuthUser } from '../auth/auth-user.js';
 import { ChangeAdministrationDto } from './dto/change-administration.dto.js';
 import { CreatePropertyDto } from './dto/create-property.dto.js';
@@ -12,6 +13,7 @@ export class PropertiesService {
   constructor(
     private readonly properties: PropertiesRepository,
     private readonly administrationsService: AdministrationsService,
+    private readonly municipalitiesService: MunicipalitiesService,
   ) {}
 
   async create(dto: CreatePropertyDto, user: AuthUser): Promise<Property> {
@@ -19,9 +21,11 @@ export class PropertiesService {
     if (administrationId) {
       await this.administrationsService.findOne(administrationId);
     }
+    await this.municipalitiesService.assertExist([dto.municipalityId]);
     return this.properties.create({
       propertyType: dto.propertyType,
       address: dto.address,
+      municipalityId: dto.municipalityId,
       administrationId: administrationId ?? null,
     });
   }

@@ -30,6 +30,10 @@ export class CreatePropertyDto {
   @IsIn(PROPERTY_TYPES)
   propertyType: PropertyType;
 
+  @IsString()
+  @IsNotEmpty()
+  municipalityId: string;
+
   @ValidateNested()
   @Type(() => AddressDto)
   address: AddressDto;

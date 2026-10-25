@@ -47,7 +47,7 @@ Property manager and contractor onboarding, administrations, and properties are 
 | Profile type            | The kind of user a person is in the app (`propertyManager`, `directClient`, `contractor`, `tradesman`). Chosen by the person when they sign up. |
 | Onboarding              | The step after a person's first sign-in in which they choose their profile type and become a User of the app. |
 | Service area            | The municipalities a tradesman works in. They are only found and booked for homes in those municipalities. |
-| Municipality            | A locality of the catalog: Argentina's municipalities, from the national Georef service, plus the 15 comunas of the City of Buenos Aires. |
+| Municipality            | A locality of the catalog: Argentina's municipalities, from the national Georef service, including the 15 comunas of the City of Buenos Aires. |
 | Slot                    | A start time for a job, on the hour or half hour between 07:00 and 18:30. It is not the job's duration: the 30-minute grid only spaces bookings out across a tradesman's day. A direct client books a tradesman by picking one of their free slots. |
 | Agenda                  | A tradesman's scheduled tasks, ordered by date.                                                                             |
 
@@ -300,6 +300,7 @@ Each role has a profile with role-specific fields:
 | --------------- | -------------------- | ---- | --------------------------------------------------------------------- |
 | Tradesman       | `trades`             | enum[] | Zero or more trades. See [Trade](#trade).                           |
 | Tradesman       | `contractorId`       | UUID | Optional. FK → User (contractor). Empty for independent tradesmen. A tradesman works for **one contractor at a time** (for now). |
+| Tradesman       | `ratingSum`          | integer | Sum of the ratings received, so the average stays exact. Starts at 0. |
 | Tradesman       | `ratingCount`        | integer | Number of ratings received. Starts at 0. |
 | Tradesman       | `ratingAverage`      | decimal | Optional. Average of the ratings received, 1 to 5; empty with no ratings. Kept up to date in the transaction that completes a task, so searches can sort by it. |
 | Contractor      | `companyId`          | UUID | Optional. FK → Company. Empty until the contractor creates their Company. |
@@ -314,12 +315,13 @@ Enum: `electrician`, `handyman`, `plumber`, `mason` (list to be extended). A tra
 
 #### Municipality
 
-The catalog of localities where properties are and tradesmen work: every municipality of the national [Georef](https://datosgobar.github.io/georef-ar-api/) service, plus the 15 comunas of the City of Buenos Aires (CABA) as separate localities. Georef does not list CABA as a municipality, but it lists its comunas as departments.
+The catalog of localities where properties are and tradesmen work: every municipality of the national [Georef](https://datosgobar.github.io/georef-ar-api/) service, which lists the 15 comunas of the City of Buenos Aires (CABA) as municipalities. Santa Cruz and Santiago del Estero have no municipalities in Georef, so for those two provinces the catalog has their departments instead (7 and 27). 2,116 localities in total, as of 2026-10-25.
 
 | Field          | Type   | Notes                                                  |
 | -------------- | ------ | ------------------------------------------------------ |
-| `id`           | string | Primary key: Georef's municipality id, or for a CABA comuna, Georef's department id. |
-| `name`         | string | For CABA comunas, "Comuna 1" to "Comuna 15".            |
+| `id`           | string | Primary key: Georef's municipality id (six digits), or its department id (five digits) in Santa Cruz and Santiago del Estero. |
+| `name`         | string | For CABA, "Comuna 1" to "Comuna 15".                     |
+| `searchName`   | string | `name` lowercased and without accents, for accent-insensitive search. |
 | `provinceId`   | string | Georef's province id.                                  |
 | `provinceName` | string |                                                        |
 
@@ -615,7 +617,7 @@ There is intentionally no `inProgress` status: the tradesman's experience must s
 - **Versioning:** `TBD`
 - **Format:** JSON
 - **Resource naming:** `TBD`
-- **Pagination:** cursor-based for lists that can grow without bound (first: `GET /tradesmen`). Query `?cursor=&limit=` (`limit` 1 to 50, default 20); response `{ "items": [...], "nextCursor": string | null }`. The cursor is opaque to clients: pass back `nextCursor` to get the next page. Lists bounded per user (a client's tasks, a tradesman's agenda) are not paginated for now.
+- **Pagination:** cursor-based for lists that can grow without bound (first: `GET /tradesmen`). Query `?cursor=&limit=` (`limit` 1 to 50, default 20); response `{ "items": [...], "nextCursor": string | null }`. The cursor is opaque to clients: pass back `nextCursor` to get the next page. For now it encodes an offset, enough for search results read a few pages deep; it can become a keyset cursor without changing the contract. Lists bounded per user (a client's tasks, a tradesman's agenda) are not paginated for now.
 - **Filtering and sorting:** `TBD`
 - **Dates:** ISO 8601 in UTC
 - **Documentation:** OpenAPI 3, generated from the code (`@nestjs/swagger` with its CLI plugin, so DTOs and entity classes describe themselves). Swagger UI at `/docs`, the JSON document at `/docs/openapi.json`. Entities are classes, not interfaces, so the document can describe responses; `User` is a union of one class per profile type (`oneOf`).
@@ -634,7 +636,7 @@ Every endpoint requires a valid access token unless its required role is "None".
 | PUT    | `/me/trades`                            | Replace the caller's trades.                                                 | Tradesman      |
 | PUT    | `/me/municipalities`                    | Replace the caller's service area (`municipalityIds`). `400` for an unknown municipality. | Tradesman      |
 | GET    | `/provinces`                            | Every province of the catalog, by name.                                      | Authenticated (onboarded or not) |
-| GET    | `/municipalities?provinceId=&search=`   | Municipalities of the catalog, by name: of a province, and/or whose name contains `search` (ignoring case and accents). At most 50. | Authenticated (onboarded or not) |
+| GET    | `/municipalities?provinceId=&search=`   | Municipalities of the catalog, by name: all of a province, and/or (at most 50) whose name contains `search`, ignoring case and accents. | Authenticated (onboarded or not) |
 | GET    | `/me/invitations`                       | Pending, non-expired invitations for the caller's email.                     | Authenticated (onboarded or not) |
 | POST   | `/invitations/:id/accept`               | An existing User accepts an invitation for their email.                      | Invited User   |
 | POST   | `/invitations/:id/decline`              | Decline an invitation for the caller's email.                                | Invited person |

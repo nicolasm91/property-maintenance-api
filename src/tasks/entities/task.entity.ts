@@ -1,7 +1,7 @@
 import { Address } from '../../properties/entities/property.entity.js';
 import { Trade } from '../../users/entities/user.entity.js';
 
-export const TASK_STATUSES = ['unassigned', 'assigned', 'completed', 'cancelled', 'rejected'] as const;
+export const TASK_STATUSES = ['unassigned', 'assigned', 'done', 'completed', 'cancelled', 'rejected'] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
@@ -14,6 +14,7 @@ export const TASK_EVENT_TYPES = [
   'reassigned',
   'rejected',
   'rescheduled',
+  'done',
   'completed',
   'cancelled',
 ] as const;
@@ -39,7 +40,10 @@ export class Task {
   trade: Trade;
   status: TaskStatus;
   scheduledAt: Date;
+  doneAt: Date | null;
   completedAt: Date | null;
+  // 1 to 5, given by the requester when confirming the work.
+  rating: number | null;
   cancelledAt: Date | null;
   property: TaskProperty;
   createdBy: PersonSummary;
@@ -54,5 +58,6 @@ export class TaskEvent {
   actor: PersonSummary;
   tradesmanId: string | null;
   reason: string | null;
+  rating: number | null;
   occurredAt: Date;
 }
