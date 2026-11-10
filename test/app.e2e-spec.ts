@@ -6,7 +6,7 @@ import { AppModule } from './../src/app.module.js';
 import { IdentityProvider } from './../src/auth/identity-provider.js';
 import { TokenVerifier } from './../src/auth/token-verifier.js';
 
-describe('AppController (e2e)', () => {
+describe('App (e2e)', () => {
   let app: INestApplication<App>;
   const tokenVerifier = { verify: vi.fn() };
 
@@ -22,10 +22,6 @@ describe('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
-  });
-
-  it('/ (GET)', () => {
-    return request(app.getHttpServer()).get('/').expect(200).expect('Hello World!');
   });
 
   it('rejects protected routes without a token', () => {
