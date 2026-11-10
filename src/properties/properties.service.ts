@@ -62,8 +62,28 @@ export class PropertiesService {
   }
 
   async findAdministrationHistory(id: string, user: AuthUser): Promise<AdministrationAssignment[]> {
-    await this.findOne(id, user);
-    return this.properties.findAdministrationHistory(id);
+    if (user.role !== 'propertyManager') {
+      await this.findOne(id, user);
+      return this.properties.findAdministrationHistory(id);
+    }
+    const property = await this.findOneOrThrow(id);
+    if (!user.administrationId) {
+      throw new ForbiddenException();
+    }
+    const history = await this.properties.findAdministrationHistory(id);
+    if (property.administration?.id === user.administrationId) {
+      return history;
+    }
+    const ownEnds = history
+      .filter((assignment) => assignment.administration.id === user.administrationId && assignment.endedAt)
+      .map((assignment) => assignment.endedAt!.getTime());
+    if (ownEnds.length === 0) {
+      throw new ForbiddenException();
+    }
+    // A previous administration sees the history only up to when it last stopped
+    // managing the building, so the administrations that followed stay hidden.
+    const cutoff = Math.max(...ownEnds);
+    return history.filter((assignment) => assignment.startedAt.getTime() < cutoff);
   }
 
   private async findOneOrThrow(id: string) {

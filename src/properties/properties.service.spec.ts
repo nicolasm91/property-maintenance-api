@@ -235,5 +235,67 @@ describe('PropertiesService', () => {
         NotFoundException,
       );
     });
+
+    const day = (n: number) => new Date(Date.UTC(2026, 0, n));
+    const assignment = (administrationId: string, startedAt: Date, endedAt: Date | null) => ({
+      id: `${administrationId}-${startedAt.getTime()}`,
+      administration: { id: administrationId, name: administrationId },
+      startedAt,
+      endedAt,
+    });
+    // Newest first: a1 (current) <- a2 <- a3 <- a2 <- a4.
+    const history = [
+      assignment('a1', day(5), null),
+      assignment('a2', day(4), day(5)),
+      assignment('a3', day(3), day(4)),
+      assignment('a2', day(2), day(3)),
+      assignment('a4', day(1), day(2)),
+    ];
+    const managerOf = (administrationId: string): AuthUser => ({ ...manager, administrationId });
+
+    it('returns the full history to the current administration', async () => {
+      repository.findById.mockResolvedValue(property);
+      repository.findAdministrationHistory.mockResolvedValue(history);
+
+      await expect(service.findAdministrationHistory('p1', manager)).resolves.toEqual(history);
+    });
+
+    it('returns the full history to the platform owner', async () => {
+      repository.findById.mockResolvedValue(property);
+      repository.findAdministrationHistory.mockResolvedValue(history);
+
+      await expect(service.findAdministrationHistory('p1', platformOwner)).resolves.toEqual(history);
+    });
+
+    it('returns a previous administration the history up to when it stopped managing', async () => {
+      repository.findById.mockResolvedValue(property);
+      repository.findAdministrationHistory.mockResolvedValue(history);
+
+      await expect(service.findAdministrationHistory('p1', managerOf('a4'))).resolves.toEqual([history[4]]);
+      await expect(service.findAdministrationHistory('p1', managerOf('a3'))).resolves.toEqual(history.slice(2));
+    });
+
+    it('uses the last time a previous administration stopped managing', async () => {
+      repository.findById.mockResolvedValue(property);
+      repository.findAdministrationHistory.mockResolvedValue(history);
+
+      await expect(service.findAdministrationHistory('p1', managerOf('a2'))).resolves.toEqual(history.slice(1));
+    });
+
+    it('throws 403 to an administration that never managed the property', async () => {
+      repository.findById.mockResolvedValue(property);
+      repository.findAdministrationHistory.mockResolvedValue(history);
+
+      await expect(service.findAdministrationHistory('p1', managerOf('a9'))).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('throws 403 to a property manager without an administration', async () => {
+      repository.findById.mockResolvedValue(property);
+
+      await expect(
+        service.findAdministrationHistory('p1', { ...manager, administrationId: null }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.findAdministrationHistory).not.toHaveBeenCalled();
+    });
   });
 });
