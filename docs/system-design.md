@@ -73,6 +73,7 @@ Business rules:
 - Both `admin` and `member` users can create tasks.
 - Each building is assigned to one property administration at a time, and knows which one it is.
 - A building can change administration over time. The full assignment history is kept.
+- The current administration sees the full assignment history. A previous administration sees it only up to when it last stopped managing the building, so it never learns which administrations came after.
 - Property managers can only create tasks for buildings currently assigned to their administration.
 - When a building changes administration, the new administration can view the tasks managed by previous administrations, so it can follow the management history. The previous administration loses access to the building's tasks.
 - An administration can have more than one `admin`.
@@ -650,7 +651,7 @@ Every endpoint requires a valid access token unless its required role is "None".
 | GET    | `/properties?administrationId=`         | List properties. Optional filter: buildings currently assigned to an administration. | Platform owner (all), or a property manager (only their administration's) |
 | GET    | `/properties/:id`                       | Get a property with its current administration.                              | Platform owner, or a property manager if the building is currently assigned to their administration |
 | PUT    | `/properties/:id/administration`        | Change the property's administration (closes the current assignment, opens a new one). | Platform owner, until it is defined (see [Open questions](#12-open-questions)) |
-| GET    | `/properties/:id/administration-history`| Administration assignment history, newest first.                             | Same as `GET /properties/:id` |
+| GET    | `/properties/:id/administration-history`| Administration assignment history, newest first. A previous administration only gets the assignments that started before its own last one ended. | Platform owner, or a property manager whose administration manages or managed the building |
 | GET    | `/tradesmen?trade=&municipalityId=&cursor=&limit=` | Independent tradesmen who have the trade and work in the municipality, paginated (see [6.1](#61-conventions)). Ordered by `ratingAverage` (unrated last), then name. Each one with `ratingAverage` and `ratingCount`. | Direct client  |
 | GET    | `/tradesmen/:id/availability?date=`     | The tradesman's free slots on a date (`YYYY-MM-DD`, platform time zone).     | Direct client  |
 | POST   | `/tasks`                                | Book a slot: create a task (`tradesmanId`, `propertyId`, `trade`, `title`, `description`, `scheduledAt`) assigned to the tradesman. `400` if the home is outside the tradesman's service area, `409` if the slot is taken. Task creation by property managers will be added here too. | Direct client  |
